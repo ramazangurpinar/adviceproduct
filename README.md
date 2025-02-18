@@ -23,10 +23,3 @@ This is an AI-powered **Product Recommendation Web App** that uses **OpenAI's AP
 | **GitHub Actions** | CI/CD pipeline for deployment |
 
 ---
-
-## 📌 Installation & Setup
-
-### 1️⃣ Clone the Repository
-```bash
-git clone https://github.com/ramazangurpinar/adviceproduct.git
-cd adviceproduct

@@ -8,6 +8,7 @@ import os
 
 app = Flask(__name__)
 
+
 # MySQL configurations
 app.config['MYSQL_HOST'] = 'localhost'  # host  address of the database
 app.config  ['MYSQL_USER'] = 'root'  # username of the database

@@ -1,82 +1,40 @@
-<!DOCTYPE html>
-<html lang="en">
+{% extends "master.html" %}
+
+{% block title %}Home - Botify{% endblock %}
+
+{% block content %}
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Botify</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='CSS/index.css') }}">
     <script src="{{ url_for('static', filename='JS/index.js') }}"></script>
-
-
 </head>
 <body>
-    <div class="sidebar">
-        <div class="logo">
-            <div class="logo-text">Botify</div>
-        </div>
-        <div class="new-chat">
-            <span class="new-chat-icon">+</span>
-            <span>New chat</span>
-        </div>
-        <div class="chat-history-title">Today</div>
-        <div class="chat-history" id="chatHistory">
-            <!-- Chat history will be added here dynamically -->
-        </div>
-        <div class="user-info">
-            <div class="user-avatar">U</div>
-            <div>{{ username }} {{ user_id }}</div>
-            <form action="{{ url_for('session_data') }}" method="get">
-                <button type="submit">Go to Session Data</button>
-            </form>
-        </div>
+   
+    <div class="user-info">
+        <div class="user-avatar">U</div>
+        <div>{{ username }} {{ user_id }}</div>
+        <form action="{{ url_for('session_data') }}" method="get">
+            <button type="submit">Go to Session Data</button>
+        </form>
     </div>
     
-    <button class="mobile-menu-button">☰</button>
     
     <div class="main-content">
         <div class="chat-container" id="chatContainer">
             <div class="empty-state" id="emptyState">
                 <div class="empty-state-logo">B</div>
                 <h1>Botify</h1>
-                <p>How can I help you today?</p>
-                <div class="example-prompts">
-                    <div class="example-prompt">
-                        <div class="example-prompt-title">Explain a concept</div>
-                        <div class="example-prompt-text">Explain quantum computing in simple terms</div>
-                    </div>
-                    <div class="example-prompt">
-                        <div class="example-prompt-title">Creative writing</div>
-                        <div class="example-prompt-text">Write a short story about a robot learning to feel emotions</div>
-                    </div>
-                    <div class="example-prompt">
-                        <div class="example-prompt-title">Problem solving</div>
-                        <div class="example-prompt-text">How do I improve my problem-solving skills?</div>
-                    </div>
-                    <div class="example-prompt">
-                        <div class="example-prompt-title">Brainstorming</div>
-                        <div class="example-prompt-text">Give me 5 ideas for my next blog post about AI</div>
-                    </div>
-                </div>
+                <p style="margin-top:5%;">Hi! what product would you like to purchase today?</p>
             </div>
-            <!-- Chat messages will be added here dynamically -->
         </div>
         <div class="input-area">
             <div class="message-input-container">
-                <textarea 
-                    class="message-input" 
-                    id="messageInput" 
-                    placeholder="Message Botify..." 
-                    rows="1"
-                    autofocus
-                ></textarea>
-                <button class="send-button" id="sendButton" disabled>
-                    ➤
-                </button>
-            </div>
-            <div class="footer">
-                Botify can make mistakes. Consider checking important information.
+                <textarea class="message-input" id="messageInput" placeholder="Message Botify..." rows="1" autofocus></textarea>
+                <button class="send-button" id="sendButton" disabled>➤</button>
             </div>
         </div>
     </div>
-
-    
+</body>
+{% endblock %}

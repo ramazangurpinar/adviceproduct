@@ -24,7 +24,10 @@
         </div>
         <div class="user-info">
             <div class="user-avatar">U</div>
-            <div>User</div>
+            <div>{{ username }} {{ user_id }}</div>
+            <form action="{{ url_for('session_data') }}" method="get">
+                <button type="submit">Go to Session Data</button>
+            </form>
         </div>
     </div>
     

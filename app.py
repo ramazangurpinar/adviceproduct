@@ -1,7 +1,7 @@
 from flask import Flask, render_template, redirect, url_for, session, request
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField, IntegerField, SelectField
-from wtforms.validators import DataRequired, Length
+from wtforms.validators import DataRequired, Length, ValidationError
 import bcrypt
 from flask_mysqldb import MySQL
 from ignore.secret import secretpw
@@ -21,10 +21,19 @@ app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)  # session time
 
 mysql = MySQL(app)
 
+def username_exists(form, field):
+    cursor = mysql.connection.cursor()
+    cursor.execute("SELECT id FROM users WHERE username = %s", (field.data,))
+    existing_user = cursor.fetchone()
+    cursor.close()
+    
+    if existing_user:
+        raise ValidationError('This username is already taken. Please choose another one.')
+
 class RegistrationForm(FlaskForm):
     name = StringField('Name', validators=[DataRequired(), Length(min=2, max=50)])
     surname = StringField('Surname', validators=[DataRequired(), Length(min=2, max=50)])
-    username = StringField('Username', validators=[DataRequired(), Length(min=4, max=50)])
+    username = StringField('Username', validators=[DataRequired(), Length(min=4, max=50), username_exists])
     password = PasswordField('Password', validators=[DataRequired(), Length(min=6, max=20)])
     country = StringField('Country', validators=[Length(max=100)])
     age = IntegerField('Age')

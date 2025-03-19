@@ -1,0 +1,48 @@
+.navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #333;
+    color: white;
+    padding: 10px 20px;
+    position: fixed;
+    top: 0;
+    width: 100%;
+    z-index: 100;
+}
+
+.navbar .logo-text {
+    font-size: 1.5rem;
+}
+
+.navbar .navbar-links {
+    display: flex;
+    gap: 20px;
+}
+
+.navbar .navbar-item {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+.navbar .navbar-icon {
+    width: 20px;
+    height: 20px;
+    margin-right: 5px;
+}
+
+.main-content {
+    margin-top: 60px;
+    padding: 20px;
+}
+
+.mobile-menu-button {
+    display: none;
+}
+
+@media screen and (max-width: 768px) {
+    .mobile-menu-button {
+        display: block;
+    }
+}

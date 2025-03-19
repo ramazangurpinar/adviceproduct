@@ -8,6 +8,7 @@ from ignore.secret import secretpw
 import os
 from dotenv import load_dotenv
 from datetime import timedelta
+import json
 
 app = Flask(__name__)
 load_dotenv()
@@ -20,6 +21,12 @@ app.config['MYSQL_DB'] = 'productadvice'  # database name
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)  # session timeout
 
 mysql = MySQL(app)
+
+def load_countries():
+    with open("static/countries.json", "r", encoding="utf-8") as file:
+        return json.load(file)
+    
+countries = load_countries()
 
 def username_exists(form, field):
     cursor = mysql.connection.cursor()
@@ -35,7 +42,7 @@ class RegistrationForm(FlaskForm):
     surname = StringField('Surname', validators=[DataRequired(), Length(min=2, max=50)])
     username = StringField('Username', validators=[DataRequired(), Length(min=4, max=50), username_exists])
     password = PasswordField('Password', validators=[DataRequired(), Length(min=6, max=20)])
-    country = StringField('Country', validators=[Length(max=100)])
+    country = SelectField('Country', choices=[(c["code"], c["name"]) for c in countries], validators=[DataRequired()])
     age = IntegerField('Age')
     gender = SelectField('Gender', choices=[('male', 'Male'), ('female', 'Female'), ('other', 'Other')])
     submit = SubmitField('Register')

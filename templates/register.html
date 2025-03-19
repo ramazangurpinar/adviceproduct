@@ -65,8 +65,14 @@
     </div>
 
     <div class="form-group">
-        {{ form.country.label(for="country") }}
-        {{ form.country(class="form-control", id="country", placeholder="Enter your country") }}
+        {{ form.country.label }}
+        <select class="form-control" id="country" name="country" required>
+            <option value="" selected disabled>-- Select Your Country --</option>
+            {% for code, name in form.country.choices %}
+                <option value="{{ code }}">{{ name }}</option>
+            {% endfor %}
+        </select>
+    
         {% if form.country.errors %}
             <ul class="text-danger">
                 {% for error in form.country.errors %}

@@ -12,7 +12,6 @@ from datetime import timedelta
 app = Flask(__name__)
 load_dotenv()
 
-# Uygulama başlatıldığında bir kez yapılacak işlemler
 app.secret_key = os.getenv('SECRET_KEY', 'fallback-secret-key')
 app.config['MYSQL_HOST'] = 'localhost'  # host address of the database
 app.config['MYSQL_USER'] = 'root'  # username of the database

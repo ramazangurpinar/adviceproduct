@@ -21,12 +21,6 @@ app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)  # session time
 
 mysql = MySQL(app)
 
-@app.before_request
-def setup():
-    print("before request method called.")
-    print(session)
-
-
 class RegistrationForm(FlaskForm):
     name = StringField('Name', validators=[DataRequired(), Length(min=2, max=50)])
     surname = StringField('Surname', validators=[DataRequired(), Length(min=2, max=50)])
@@ -110,8 +104,6 @@ def login():
             session['user_id'] = user[0]
             session['username'] = user[1]
             session.permanent = True
-            print("Session Data After Login:", session)
-            print("login route: SECRET_KEY (from .env):", os.getenv("SECRET_KEY"))            
             return redirect(url_for('index')) 
         else:
             return "Invalid username or password! <a href='/login'>Try again</a>"

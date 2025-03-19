@@ -163,5 +163,9 @@ def logout():
 def temp():
     return render_template('temp.html')
 
+@app.route('/userprofile', methods=['GET', 'POST'])
+def userprofile():
+    return render_template('userprofile.html')
+
 if __name__ == '__main__':
     app.run(debug=True)

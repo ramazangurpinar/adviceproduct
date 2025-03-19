@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Botify{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/advice.css') }}">
+</head>
+<body>
+
+    <nav class="navbar">
+        <div class="nav-left">
+            <a href="{{ url_for('index') }}">
+                <img src="{{ url_for('static', filename='image/home.png') }}" alt="Home">
+            </a>
+        </div>
+        <div class="nav-right">
+            <a href="{{ url_for('index') }}">
+                <img src="{{ url_for('static', filename='image/user.png') }}" alt="User">
+            </a>
+            <a href="{{ url_for('logout') }}">
+                <img src="{{ url_for('static', filename='image/logout.png') }}" alt="Logout">
+            </a>
+        </div>
+    </nav>
+
+    <div class="main-content">
+        {% block content %}{% endblock %}
+    </div>
+
+    <footer>
+    </footer>
+
+</body>
+</html>

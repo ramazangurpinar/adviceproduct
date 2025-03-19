@@ -152,6 +152,9 @@ def logout():
     session.pop('username', None) 
     return redirect(url_for('login'))
 
+@app.route('/temp', methods=['GET', 'POST'])
+def temp():
+    return render_template('temp.html')
 
 if __name__ == '__main__':
     app.run(debug=True)

@@ -11,21 +11,12 @@
     <script src="{{ url_for('static', filename='JS/index.js') }}"></script>
 </head>
 <body>
-   
-    <div class="user-info">
-        <div class="user-avatar">U</div>
-        <div>{{ username }} {{ user_id }}</div>
-        <form action="{{ url_for('session_data') }}" method="get">
-            <button type="submit">Go to Session Data</button>
-        </form>
-    </div>
-    
-    
     <div class="main-content">
         <div class="chat-container" id="chatContainer">
             <div class="empty-state" id="emptyState">
                 <div class="empty-state-logo">B</div>
                 <h1>Botify</h1>
+                <h1>Hi, {{ fullname }}</h1>
                 <p style="margin-top:5%;">Hi! what product would you like to purchase today?</p>
             </div>
         </div>

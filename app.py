@@ -69,14 +69,17 @@ def index():
     if 'user_id' not in session:
         return redirect(url_for('login'))
     else:
-        user_id = session['user_id']
-        username = session['username']
-    return render_template('index.html', user_id=user_id, username=username)
+        user_id = session.get('user_id', None)
+        username = session.get('username', None)
+        fullname = session.get("name", "Guest") + " "+session.get("surname", "")
+    return render_template('index.html', user_id=user_id, username=username, fullname=fullname)
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     session.pop('user_id', None)  
     session.pop('username', None)
+    session.pop('name', None)  
+    session.pop('surname', None)
     form = RegistrationForm()
     if form.validate_on_submit():
         name = form.name.data
@@ -113,12 +116,14 @@ def login():
         password = form.password.data
 
         cursor = mysql.connection.cursor()
-        cursor.execute("SELECT id, username, password FROM users WHERE username = %s", (username,))
+        cursor.execute("SELECT id, username, password, name, surname FROM users WHERE username = %s", (username,))
         user = cursor.fetchone()
         cursor.close()
         if user and bcrypt.checkpw(password.encode('utf-8'), user[2].encode('utf-8')):  
             session['user_id'] = user[0]
             session['username'] = user[1]
+            session['name'] = user[3]
+            session['surname'] = user[4]
             session.permanent = True
             return redirect(url_for('index')) 
         else:
@@ -157,6 +162,8 @@ def session_data():
 def logout():
     session.pop('user_id', None)  
     session.pop('username', None) 
+    session.pop('name', None) 
+    session.pop('surname', None) 
     return redirect(url_for('login'))
 
 @app.route('/temp', methods=['GET', 'POST'])

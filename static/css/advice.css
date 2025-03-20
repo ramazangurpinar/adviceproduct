@@ -33,7 +33,7 @@ body {
 .nav-right {
     display: flex;
     align-items: center;
-    margin-right: 20px;
+    margin-right: 3vh;
 }
 
 .nav-right a {

@@ -14,6 +14,9 @@
             </a>
         </div>
         <div class="nav-right">
+            <a href="{{ url_for('index') }}"> <!---TO CHANGE-->>
+                <img src="{{ url_for('static', filename='image/heart.png') }}" alt="Liked items">
+            </a>
             <a href="{{ url_for('profile') }}">
                 <img src="{{ url_for('static', filename='image/user.png') }}" alt="User">
             </a>

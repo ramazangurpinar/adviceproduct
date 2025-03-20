@@ -7,7 +7,6 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/advice.css') }}">
 </head>
 <body>
-
     <nav class="navbar">
         <div class="nav-left">
             <a href="{{ url_for('index') }}">
@@ -15,7 +14,7 @@
             </a>
         </div>
         <div class="nav-right">
-            <a href="{{ url_for('userprofile') }}">
+            <a href="{{ url_for('profile') }}">
                 <img src="{{ url_for('static', filename='image/user.png') }}" alt="User">
             </a>
             <a href="{{ url_for('logout') }}">

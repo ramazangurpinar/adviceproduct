@@ -132,32 +132,31 @@ def login():
     return render_template('login.html', form=form)
 
 
-@app.route('/session-data')
-def session_data():
-    username = session.get('username', None)
-    if username:
-        html_content = f'''
-        <html>
-            <body>
-                <h1>Session Data Page</h1>
-                <p>Here is the username stored in session:</p>
-                <span>{username}</span>
-            </body>
-        </html>
-        '''
-    else:
-        html_content = '''
-        <html>
-            <body>
-                <h1>Session Data Page</h1>
-                <p>No username found in session.</p>
-            </body>
-        </html>
-        '''
-    
-    return html_content
+def get_country_name(country_code):
+    countries = load_countries()  
+    country_dict = {item["code"]: item["name"] for item in countries}
+    return country_dict.get(country_code, country_code) 
 
-    
+
+@app.route('/profile')
+def profile():
+    if 'user_id' not in session:
+        return redirect(url_for('index')) 
+
+    user_id = session['user_id']
+
+    cursor = mysql.connection.cursor()
+    cursor.execute("SELECT username, country, name, surname, age, gender FROM users WHERE id = %s", (user_id,))
+    user = cursor.fetchone()
+    cursor.close()
+
+    if not user:
+        return "User not found!", 404
+
+    country_name = get_country_name(user[1])
+    return render_template('profile.html', user=user, country_name=country_name)
+
+
 @app.route('/logout')
 def logout():
     session.pop('user_id', None)  
@@ -170,9 +169,6 @@ def logout():
 def temp():
     return render_template('temp.html')
 
-@app.route('/userprofile', methods=['GET', 'POST'])
-def userprofile():
-    return render_template('userprofile.html')
 
 if __name__ == '__main__':
     app.run(debug=True)

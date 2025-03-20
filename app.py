@@ -170,5 +170,12 @@ def temp():
     return render_template('temp.html')
 
 
+@app.route('/favourites', methods=['GET', 'POST'])
+def favourites():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    return render_template('favourites.html')
+
 if __name__ == '__main__':
     app.run(debug=True)

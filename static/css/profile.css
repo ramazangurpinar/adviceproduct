@@ -23,6 +23,7 @@ body {
     border-radius: 10px;
     box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
     width: 350px;
+    margin-bottom: 500px;
 }
 
 .profile-image {
@@ -31,7 +32,8 @@ body {
     border-radius: 50%;
     object-fit: cover;
     border: 3px solid #52ffab;
-    margin-bottom: 15px;
+    margin-bottom: 500px;
+    margin-left:40px;
 }
 
 .profile-name {

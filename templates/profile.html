@@ -5,26 +5,50 @@
 {% block content %}
 <!-- Bootstrap CSS in master.html -->
 <div class="container py-5">
-    <div class="row justify-content-center">
-        <div class="col-md-8 col-lg-6">
-            <div class="card shadow rounded">
-                <div class="card-body">
-                    <h3 class="card-title text-center mb-4">{{ user[0] }}'s Profile</h3>
+  <div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+    <div class="card shadow-lg border-0 rounded-3">
+        <div class="card-body p-5">
+        
+        <!-- Title -->
+        <div class="text-center mb-4">
+            <h3 class="mb-0 font-weight-bold">{{ user[2] }} {{ user[3] }}'s Profile</h3>
+            <small class="text-muted">Personal Information</small>
+        </div>
 
-                    <ul class="list-group list-group-flush">
-                        <li class="list-group-item"><strong>Country:</strong> {{ country_name }}</li>
-                        <li class="list-group-item"><strong>Name:</strong> {{ user[2] }}</li>
-                        <li class="list-group-item"><strong>Surname:</strong> {{ user[3] }}</li>
-                        <li class="list-group-item"><strong>Age:</strong> {{ user[4] }}</li>
-                        <li class="list-group-item"><strong>Gender:</strong> {{ user[5] }}</li>
-                    </ul>
-
-                    <div class="mt-4 text-center">
-                        <a href="{{ url_for('edit_profile') }}" class="btn btn-warning px-4">Edit Profile</a>
-                    </div>
-                </div>
+        <!-- Informations -->
+        <div class="mb-3">
+            <div class="d-flex justify-content-between">
+            <span class="font-weight-bold">Username:</span>
+            <span>{{ user[0] }}</span>
+            </div>
+            <hr>
+            <div class="d-flex justify-content-between">
+            <span class="font-weight-bold">Country:</span>
+            <span>{{ user[1] }}</span>
+            </div>
+            <hr>
+            <div class="d-flex justify-content-between">
+            <span class="font-weight-bold">Age:</span>
+            <span>{{ user[4] }}</span>
+            </div>
+            <hr>
+            <div class="d-flex justify-content-between">
+            <span class="font-weight-bold">Gender:</span>
+            <span>{{ user[5] }}</span>
             </div>
         </div>
+
+        <!-- Buton -->
+        <div class="text-center mt-4">
+            <a href="{{ url_for('edit_profile') }}" class="btn btn-warning px-4 font-weight-bold">
+            Edit Profile
+            </a>
+        </div>
+
+        </div>
     </div>
+    </div>
+  </div>
 </div>
 {% endblock %}

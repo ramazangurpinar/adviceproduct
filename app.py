@@ -89,6 +89,8 @@ def register():
     session.pop('name', None)  
     session.pop('surname', None)
     form = RegistrationForm()
+    form.submit.label.text = "Sign Up"
+
     if form.validate_on_submit():
         name = form.name.data
         surname = form.surname.data
@@ -161,8 +163,10 @@ def profile():
     if not user:
         return "User not found!", 404
 
-    country_name = get_country_name(user[1])
-    return render_template('profile.html', user=user, country_name=country_name)
+    user = list(user)
+    user[1] = get_country_name(user[1])
+    user[5] = user[5].capitalize()
+    return render_template('profile.html', user=user)
 
 
 @app.route('/edit_profile', methods=['GET', 'POST'])

@@ -43,8 +43,8 @@ class RegistrationForm(FlaskForm):
     username = StringField('Username', validators=[DataRequired(), Length(min=4, max=50), username_exists])
     password = PasswordField('Password', validators=[DataRequired(), Length(min=6, max=20)])
     country = SelectField('Country', choices=[(c["code"], c["name"]) for c in countries], validators=[DataRequired()])
-    age = IntegerField('Age')
-    gender = SelectField('Gender', choices=[('male', 'Male'), ('female', 'Female'), ('other', 'Other')])
+    age = IntegerField('Age', validators=[DataRequired()])
+    gender = SelectField('Gender', choices=[('male', 'Male'), ('female', 'Female'), ('other', 'Other')], validators=[DataRequired()])
     submit = SubmitField('Register')
 
 class LoginForm(FlaskForm):

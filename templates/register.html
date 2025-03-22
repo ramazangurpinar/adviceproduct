@@ -1,114 +1,152 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <title>Register PA</title>
+  <title>Register - Botify</title>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css">
   <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.slim.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+
+  <script src="{{ url_for('static', filename='js/form.js') }}"></script>
+
+  <style>
+    body {
+      background: #f7f9fc;
+    }
+
+    .register-container {
+      max-width: 600px;
+      margin: 60px auto;
+      background: #fff;
+      padding: 40px;
+      border-radius: 12px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+
+    .form-title {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    .form-control::placeholder {
+      color: #ccc;
+    }
+
+    .text-danger {
+      font-size: 0.9rem;
+    }
+  </style>
 </head>
 <body>
 
 <div class="container">
-  <h2>Register form</h2>
-  <form action="/register" method="POST">
-    {{ form.hidden_tag() }}
+  <div class="register-container">
+    <h2 class="form-title">Create Your Account</h2>
     
-    <div class="form-group">
-        {{ form.name.label(for="name") }}
-        {{ form.name(class="form-control", id="name", placeholder="Enter your name") }}
+    <form action="/register" method="POST">
+      {{ form.hidden_tag() }}
+
+      <div class="form-group">
+        {{ form.name.label(class="form-label") }}
+        {{ form.name(class="form-control", placeholder="Enter your name") }}
         {% if form.name.errors %}
-            <ul class="text-danger">
-                {% for error in form.name.errors %}
-                    <li>{{ error }}</li>
-                {% endfor %}
-            </ul>
-        {% endif %}
-    </div>
-
-    <div class="form-group">
-        {{ form.surname.label(for="surname") }}
-        {{ form.surname(class="form-control", id="surname", placeholder="Enter your surname") }}
-        {% if form.surname.errors %}
-            <ul class="text-danger">
-                {% for error in form.surname.errors %}
-                    <li>{{ error }}</li>
-                {% endfor %}
-            </ul>
-        {% endif %}
-    </div>
-
-    <div class="form-group">
-        {{ form.username.label(for="username") }}
-        {{ form.username(class="form-control", id="username", placeholder="Choose a username") }}
-        {% if form.username.errors %}
-            <ul class="text-danger">
-                {% for error in form.username.errors %}
-                    <li>{{ error }}</li>
-                {% endfor %}
-            </ul>
-        {% endif %}
-    </div>
-
-    <div class="form-group">
-        {{ form.password.label(for="password") }}
-        {{ form.password(class="form-control", id="password", placeholder="Enter a strong password") }}
-        {% if form.password.errors %}
-            <ul class="text-danger">
-                {% for error in form.password.errors %}
-                    <li>{{ error }}</li>
-                {% endfor %}
-            </ul>
-        {% endif %}
-    </div>
-
-    <div class="form-group">
-        {{ form.country.label }}
-        <select class="form-control" id="country" name="country" required>
-            <option value="" selected disabled>-- Select Your Country --</option>
-            {% for code, name in form.country.choices %}
-                <option value="{{ code }}">{{ name }}</option>
+          <ul class="text-danger">
+            {% for error in form.name.errors %}
+              <li>{{ error }}</li>
             {% endfor %}
-        </select>
-    
+          </ul>
+        {% endif %}
+      </div>
+
+      <div class="form-group">
+        {{ form.surname.label(class="form-label") }}
+        {{ form.surname(class="form-control", placeholder="Enter your surname") }}
+        {% if form.surname.errors %}
+          <ul class="text-danger">
+            {% for error in form.surname.errors %}
+              <li>{{ error }}</li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+      </div>
+      
+      <div class="form-group">
+        {{ form.username.label(class="form-label") }}
+        {{ form.username(class="form-control is-invalid" if form.username.errors else "form-control", placeholder="Enter a username") }}
+      
+        {% for error in form.username.errors %}
+          <div class="invalid-feedback d-block">
+            {{ error }}
+          </div>
+        {% endfor %}
+      </div>
+      
+      <div class="form-group">
+        {{ form.password.label(class="form-label") }}
+         <div class="input-group">
+            {{ form.password(class="form-control", id="password", placeholder="Create a strong password") }}
+            <div class="input-group-append">
+              <button class="btn btn-outline-secondary" type="button" id="togglePassword">
+                <i class="bi bi-eye" id="toggleIcon"></i>
+              </button>
+            </div>
+          </div>
+        {% if form.password.errors %}
+          <ul class="text-danger mt-1 mb-0">
+            {% for error in form.password.errors %}
+              <li>{{ error }}</li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+      </div>
+      
+
+      <div class="form-group">
+        {{ form.country.label(class="form-label") }}
+        {{ form.country(class="form-control") }}
         {% if form.country.errors %}
-            <ul class="text-danger">
-                {% for error in form.country.errors %}
-                    <li>{{ error }}</li>
-                {% endfor %}
-            </ul>
+          <ul class="text-danger">
+            {% for error in form.country.errors %}
+              <li>{{ error }}</li>
+            {% endfor %}
+          </ul>
         {% endif %}
-    </div>
+      </div>
 
-    <div class="form-group">
-        {{ form.age.label(for="age") }}
-        {{ form.age(class="form-control", id="age", placeholder="Enter your age") }}
+      <div class="form-group">
+        {{ form.age.label(class="form-label") }}
+        {{ form.age(class="form-control", placeholder="Enter your age") }}
         {% if form.age.errors %}
-            <ul class="text-danger">
-                {% for error in form.age.errors %}
-                    <li>{{ error }}</li>
-                {% endfor %}
-            </ul>
+          <ul class="text-danger">
+            {% for error in form.age.errors %}
+              <li>{{ error }}</li>
+            {% endfor %}
+          </ul>
         {% endif %}
-    </div>
+      </div>
 
-    <div class="form-group">
-        {{ form.gender.label(for="gender") }}
-        {{ form.gender(class="form-control", id="gender") }}
+      <div class="form-group">
+        {{ form.gender.label(class="form-label") }}
+        {{ form.gender(class="form-control") }}
         {% if form.gender.errors %}
-            <ul class="text-danger">
-                {% for error in form.gender.errors %}
-                    <li>{{ error }}</li>
-                {% endfor %}
-            </ul>
+          <ul class="text-danger">
+            {% for error in form.gender.errors %}
+              <li>{{ error }}</li>
+            {% endfor %}
+          </ul>
         {% endif %}
-    </div>
-    {{ form.submit(class="btn btn-dark mt-4") }}
-  </form>
+      </div>
+
+      <div class="text-center">
+        {{ form.submit(class="btn btn-primary btn-block mt-4") }}
+      </div>
+    </form>
+  </div>
 </div>
 
 </body>
 </html>
-<!-- End of file: templates/register.html -->

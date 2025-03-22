@@ -107,17 +107,32 @@ def register():
         (name, surname, username, hashed_password, country, age, gender))
 
         mysql.connection.commit()
+
+        cursor.execute("SELECT id FROM users WHERE username = %s", (username,))
+        user = cursor.fetchone()
         cursor.close()
 
-        return redirect(url_for('login'))
+        # Session Creation
+        session['user_id'] = user[0]
+        session['username'] = username
+        session['name'] = name
+        session['surname'] = surname
+        session.permanent = True        
+
+        return redirect(url_for('register_success'))
 
     return render_template('register.html', form=form)
 
+@app.route('/register-success')
+def register_success():
+    if 'username' not in session:
+        return redirect(url_for('login'))
+    return render_template('register_success.html', username=session['username'])
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     form = LoginForm()
-
+    error_message = None
     if 'username' in session:
        return redirect(url_for('index'))
 
@@ -135,18 +150,17 @@ def login():
             session['name'] = user[3]
             session['surname'] = user[4]
             session.permanent = True
-            return redirect(url_for('index')) 
+            return redirect(url_for('index'))
         else:
-            return "Invalid username or password! <a href='/login'>Try again</a>"
+            error_message = "Invalid username or password."
 
-    return render_template('login.html', form=form)
+    return render_template('login.html', form=form, error=error_message)
 
 
 def get_country_name(country_code):
     countries = load_countries()  
     country_dict = {item["code"]: item["name"] for item in countries}
     return country_dict.get(country_code, country_code) 
-
 
 @app.route('/profile')
 def profile():

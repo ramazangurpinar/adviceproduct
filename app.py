@@ -52,6 +52,14 @@ class LoginForm(FlaskForm):
     password = PasswordField('Password', validators=[DataRequired(), Length(min=6, max=20)])
     submit = SubmitField('Login')
 
+class EditProfileForm(FlaskForm):
+    name = StringField('Name', validators=[DataRequired(), Length(min=2, max=50)])
+    surname = StringField('Surname', validators=[DataRequired(), Length(min=2, max=50)])
+    country = SelectField('Country', choices=[(c["code"], c["name"]) for c in countries], validators=[DataRequired()])
+    age = IntegerField('Age')
+    gender = SelectField('Gender', choices=[('male', 'Male'), ('female', 'Female'), ('other', 'Other')])
+    submit = SubmitField('EditProfile')
+
 
 # Test database connection
 @app.route('/testdb')
@@ -156,6 +164,72 @@ def profile():
     country_name = get_country_name(user[1])
     return render_template('profile.html', user=user, country_name=country_name)
 
+
+@app.route('/edit_profile', methods=['GET', 'POST'])
+def edit_profile():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    user_id = session['user_id']
+
+    form = EditProfileForm()
+
+    cursor = mysql.connection.cursor()
+
+    if request.method == 'GET':
+        cursor.execute("SELECT name, surname, country, age, gender FROM users WHERE id = %s", (user_id,))
+        user_data = cursor.fetchone()
+        cursor.close()
+
+        if not user_data:
+            return "User not found", 404
+
+        # Formu doldur
+        form.name.data = user_data[0]
+        form.surname.data = user_data[1]
+        form.country.data = user_data[2]
+        form.age.data = user_data[3]
+        form.gender.data = user_data[4]
+
+    elif form.validate_on_submit():
+        # Form verilerini al
+        name = form.name.data
+        surname = form.surname.data
+        country = form.country.data
+        age = form.age.data
+        gender = form.gender.data
+
+        cursor.execute("""
+            UPDATE users 
+            SET name = %s, surname = %s, country = %s, age = %s, gender = %s 
+            WHERE id = %s
+        """, (name, surname, country, age, gender, user_id))
+        mysql.connection.commit()
+        cursor.close()
+
+        # Session'ı güncelle
+        session['name'] = name
+        session['surname'] = surname
+
+        return redirect(url_for('profile'))
+
+    return render_template('edit_profile.html', form=form)
+
+@app.route('/delete_profile', methods=['POST'])
+def delete_profile():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    user_id = session['user_id']
+
+    cursor = mysql.connection.cursor()
+    cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
+    mysql.connection.commit()
+    cursor.close()
+
+    session.clear()
+
+    return redirect(url_for('login'))
 
 @app.route('/logout')
 def logout():

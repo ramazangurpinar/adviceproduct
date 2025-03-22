@@ -1,28 +1,30 @@
 {% extends "master.html" %}
 
-{% block title %}Home - Botify{% endblock %}
+{% block title %}Profile - Botify{% endblock %}
 
 {% block content %}
-<head>
-    <title>Profile</title>
-    <head>
-        <title>Profile</title>
-        <link rel="stylesheet" href="{{ url_for('static', filename='CSS/profile.css') }}">
-    </head>
-</head>
-<body>
-    <div class="main-content">
-       
-        <div class="profile-container">
-            
-            <div class="profile-name">{{ user[0] }}</div>
-            <div class="profile-info"><strong>Country:</strong> {{ country_name }}</div>
-            <div class="profile-info"><strong>Name:</strong> {{ user[2] }}</div>
-            <div class="profile-info"><strong>Surname:</strong> {{ user[3] }}</div>
-            <div class="profile-info"><strong>Age:</strong> {{ user[4] }}</div>
-            <div class="profile-info"><strong>Gender:</strong> {{ user[5] }}</div>
-            <button class="profile-btn">Edit Profile</button>
+<!-- Bootstrap CSS in master.html -->
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <div class="card shadow rounded">
+                <div class="card-body">
+                    <h3 class="card-title text-center mb-4">{{ user[0] }}'s Profile</h3>
+
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item"><strong>Country:</strong> {{ country_name }}</li>
+                        <li class="list-group-item"><strong>Name:</strong> {{ user[2] }}</li>
+                        <li class="list-group-item"><strong>Surname:</strong> {{ user[3] }}</li>
+                        <li class="list-group-item"><strong>Age:</strong> {{ user[4] }}</li>
+                        <li class="list-group-item"><strong>Gender:</strong> {{ user[5] }}</li>
+                    </ul>
+
+                    <div class="mt-4 text-center">
+                        <a href="{{ url_for('edit_profile') }}" class="btn btn-warning px-4">Edit Profile</a>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
-</body>
+</div>
 {% endblock %}

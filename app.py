@@ -4,11 +4,14 @@ from wtforms import StringField, PasswordField, SubmitField, IntegerField, Selec
 from wtforms.validators import DataRequired, Length, ValidationError
 import bcrypt
 from flask_mysqldb import MySQL
+import MySQLdb.cursors
 from ignore.secret import secretpw
 import os
 from dotenv import load_dotenv
 from datetime import timedelta
 import json
+from flask_socketio import SocketIO, emit
+from llama_cpp import Llama
 
 app = Flask(__name__)
 load_dotenv()
@@ -21,6 +24,9 @@ app.config['MYSQL_DB'] = 'productadvice'  # database name
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)  # session timeout
 
 mysql = MySQL(app)
+socketio = SocketIO(app)
+
+llm = Llama(model_path=r"C:\Users\ramaz\OneDrive\tinyllama-1.1b-chat-v1.0-q4_k_m.gguf")
 
 def load_countries():
     with open("static/countries.json", "r", encoding="utf-8") as file:
@@ -269,6 +275,53 @@ def favourites():
     
     return render_template('favourites.html')
 
+@app.route('/chat')
+def chat():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    return render_template('chat.html')
+
+def save_message(user_id, role, message):
+    cursor = mysql.connection.cursor()
+    cursor.execute(
+        "INSERT INTO chat_messages (user_id, role, message) VALUES (%s, %s, %s)",
+        (user_id, role, message)
+    )
+    mysql.connection.commit()
+    cursor.close()
+
+def get_chat_history(user_id):
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    cursor.execute(
+        "SELECT role, message FROM chat_messages WHERE user_id = %s ORDER BY timestamp ASC",
+        (user_id,)
+    )
+    messages = cursor.fetchall()
+    cursor.close()
+    return messages
+
+def build_prompt(history):
+    prompt = ""
+    for msg in history:
+        prompt += f"{msg['role']}: {msg['message']}\n"
+    prompt += "assistant:"
+    return prompt
+
+@socketio.on('user_message')
+def handle_user_message(data):
+    user_input = data['message']
+    user_id = session.get('user_id', None)
+
+    history = get_chat_history(user_id)
+    prompt = build_prompt(history) + f"user: {user_input}\n"
+
+    output = llm(prompt, max_tokens=150, stop=["user:"])
+    reply = output['choices'][0]['text'].strip()
+
+    save_message(user_id, 'user', user_input)
+    save_message(user_id, 'assistant', reply)
+
+    emit('bot_response', {'message': reply})
+
 if __name__ == '__main__':
-    app.run(debug=True)
-    
+    socketio.run(app, debug=True)

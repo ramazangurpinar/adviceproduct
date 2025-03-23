@@ -181,7 +181,7 @@ def profile():
     user_id = session['user_id']
 
     cursor = mysql.connection.cursor()
-    cursor.execute("SELECT username, country, name, surname, age, gender FROM users WHERE id = %s", (user_id,))
+    cursor.execute("SELECT username, country, name, surname, age, gender, email FROM users WHERE id = %s", (user_id,))
     user = cursor.fetchone()
     cursor.close()
 

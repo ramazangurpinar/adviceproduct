@@ -37,10 +37,20 @@ def username_exists(form, field):
     if existing_user:
         raise ValidationError('This username is already taken. Please choose another one.')
 
+def email_exists(form, field):
+    cursor = mysql.connection.cursor()
+    cursor.execute("SELECT id FROM users WHERE email = %s", (field.data,))
+    existing_email = cursor.fetchone()
+    cursor.close()
+    
+    if existing_email:
+        raise ValidationError('This email is already taken.')
+
 class RegistrationForm(FlaskForm):
     name = StringField('Name', validators=[DataRequired(), Length(min=2, max=50)])
     surname = StringField('Surname', validators=[DataRequired(), Length(min=2, max=50)])
     username = StringField('Username', validators=[DataRequired(), Length(min=4, max=50), username_exists])
+    email = StringField('Email', validators=[DataRequired(), Length(min=4, max=50), email_exists])
     password = PasswordField('Password', validators=[DataRequired(), Length(min=6, max=20)])
     country = SelectField('Country', choices=[(c["code"], c["name"]) for c in countries], validators=[DataRequired()])
     age = IntegerField('Age', validators=[DataRequired()])
@@ -95,6 +105,7 @@ def register():
         name = form.name.data
         surname = form.surname.data
         username = form.username.data
+        email = form.email.data
         password = form.password.data
         country = form.country.data
         age = form.age.data
@@ -103,8 +114,8 @@ def register():
         hashed_password = bcrypt.hashpw(password.encode('utf-8'),bcrypt.gensalt())
 
         cursor = mysql.connection.cursor()
-        cursor.execute("INSERT INTO users (name, surname, username, password, country, age, gender) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-        (name, surname, username, hashed_password, country, age, gender))
+        cursor.execute("INSERT INTO users (name, surname, username, email, password, country, age, gender) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+        (name, surname, username, email, hashed_password, country, age, gender))
 
         mysql.connection.commit()
 

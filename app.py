@@ -65,6 +65,7 @@ class LoginForm(FlaskForm):
 class EditProfileForm(FlaskForm):
     name = StringField('Name', validators=[DataRequired(), Length(min=2, max=50)])
     surname = StringField('Surname', validators=[DataRequired(), Length(min=2, max=50)])
+    email = StringField('Email', validators=[DataRequired(), Length(min=5, max=50)])
     country = SelectField('Country', choices=[(c["code"], c["name"]) for c in countries], validators=[DataRequired()])
     age = IntegerField('Age')
     gender = SelectField('Gender', choices=[('male', 'Male'), ('female', 'Female'), ('other', 'Other')])
@@ -206,37 +207,36 @@ def edit_profile():
     cursor = mysql.connection.cursor()
 
     if request.method == 'GET':
-        cursor.execute("SELECT name, surname, country, age, gender FROM users WHERE id = %s", (user_id,))
+        cursor.execute("SELECT name, surname, country, age, gender, email FROM users WHERE id = %s", (user_id,))
         user_data = cursor.fetchone()
         cursor.close()
 
         if not user_data:
             return "User not found", 404
 
-        # Formu doldur
         form.name.data = user_data[0]
         form.surname.data = user_data[1]
         form.country.data = user_data[2]
         form.age.data = user_data[3]
         form.gender.data = user_data[4]
+        form.email.data = user_data[5]
 
     elif form.validate_on_submit():
-        # Form verilerini al
         name = form.name.data
         surname = form.surname.data
+        email = form.email.data
         country = form.country.data
         age = form.age.data
         gender = form.gender.data
 
         cursor.execute("""
             UPDATE users 
-            SET name = %s, surname = %s, country = %s, age = %s, gender = %s 
+            SET name = %s, surname = %s, country = %s, age = %s, gender = %s, email = %s
             WHERE id = %s
-        """, (name, surname, country, age, gender, user_id))
+        """, (name, surname, country, age, gender, email, user_id))
         mysql.connection.commit()
         cursor.close()
 
-        # Session'ı güncelle
         session['name'] = name
         session['surname'] = surname
 

@@ -23,7 +23,7 @@ final_prompt = prompt_init + user_prompt +prompt_end
 print(deepseek_chain.invoke(final_prompt))
 
 category_prompt_init = "Categorise the product that i'm aking: '"
-category_end = "' reply only with one word"
+category_end = "' reply only with maximum one word"
 
 category_final_prompt = category_prompt_init + user_prompt + category_end
 print(deepseek_chain.invoke(category_final_prompt))

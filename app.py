@@ -4,11 +4,12 @@ from wtforms import StringField, PasswordField, SubmitField, IntegerField, Selec
 from wtforms.validators import DataRequired, Length, ValidationError
 import bcrypt
 from flask_mysqldb import MySQL
-from ignore.secret import secretpw
+from ignore.secret import secretpw, getApiKey
 import os
 from dotenv import load_dotenv
 from datetime import timedelta
 import json
+from deepseek import Chatbot
 
 app = Flask(__name__)
 load_dotenv()
@@ -91,6 +92,8 @@ def index():
         user_id = session.get('user_id', None)
         username = session.get('username', None)
         fullname = session.get("name", "Guest") + " "+session.get("surname", "")
+
+    chatbot = Chatbot(api_key = getApiKey())
     return render_template('index.html', user_id=user_id, username=username, fullname=fullname)
 
 @app.route('/register', methods=['GET', 'POST'])

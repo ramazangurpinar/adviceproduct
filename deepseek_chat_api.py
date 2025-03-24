@@ -19,13 +19,13 @@ def chat(prompt):
 
     prompt_init = "reply only listing 5 products followed by a breaf description of each of them that suits the following prompt: '"
     user_prompt = prompt
-    prompt_end = "' if the request is not a request reguarding a product reply 'I'm sorry but this box is only for the suggestion of products, please insert a new prompt'"
+    prompt_end = "' (IMPORTANT!) if the previous prompt is not an advice request 'I'm sorry but this box is only for the suggestion of products, please insert a new prompt'"
 
     final_prompt = prompt_init + user_prompt + prompt_end
     res1 = deepseek_chain.invoke(final_prompt)
 
     category_prompt_init = "Categorise the product that i'm aking: '"
-    category_end = "' reply only with one word"
+    category_end = "' reply only with one word in english"
 
     category_final_prompt = category_prompt_init + user_prompt + category_end
     print(deepseek_chain.invoke(category_final_prompt))

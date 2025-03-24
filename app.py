@@ -1,4 +1,4 @@
-from flask import Flask, render_template, redirect, url_for, session, request
+from flask import Flask, render_template, redirect, url_for, session, request, jsonify
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField, IntegerField, SelectField
 from wtforms.validators import DataRequired, Length, ValidationError
@@ -9,6 +9,7 @@ import os
 from dotenv import load_dotenv
 from datetime import timedelta
 import json
+from deepseek_chat_api import chat
 
 app = Flask(__name__)
 load_dotenv()
@@ -21,6 +22,7 @@ app.config['MYSQL_DB'] = 'productadvice'  # database name
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)  # session timeout
 
 mysql = MySQL(app)
+
 
 def load_countries():
     with open("static/countries.json", "r", encoding="utf-8") as file:
@@ -72,7 +74,6 @@ class EditProfileForm(FlaskForm):
     submit = SubmitField('EditProfile')
 
 
-# Test database connection
 @app.route('/testdb')
 def testdb():
     try:
@@ -83,16 +84,27 @@ def testdb():
     except Exception as e:
         return f"Database Connection Error: {str(e)}"
 
-@app.route('/')
+@app.route('/', methods=['GET', 'POST'])
 def index():
     if 'user_id' not in session:
         return redirect(url_for('login'))
     else:
         user_id = session.get('user_id', None)
         username = session.get('username', None)
-        fullname = session.get("name", "Guest") + " "+session.get("surname", "")
-
+        fullname = session.get("name", "Guest") + " " + session.get("surname", "")
+        
     return render_template('index.html', user_id=user_id, username=username, fullname=fullname)
+
+@app.route('/chat', methods=['POST'])
+def chat_route():
+    data = request.get_json()
+    user_message = data.get('message')
+
+    if user_message:
+        bot_response = chat(user_message)
+        return jsonify({'response': bot_response})
+
+    return jsonify({'error': 'No message received'}), 400
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():

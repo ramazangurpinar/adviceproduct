@@ -11,6 +11,7 @@
     <script src="{{ url_for('static', filename='JS/index.js') }}"></script>
 </head>
 <body>
+<form method="post" action="{{ url_for('index') }}">
     <div class="main-content">
         <div class="chat-container" id="chatContainer">
             <div class="empty-state" id="emptyState">
@@ -27,5 +28,60 @@
             </div>
         </div>
     </div>
+</form>
 </body>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        let messageInput = document.getElementById("messageInput");
+        let sendButton = document.getElementById("sendButton");
+        let chatContainer = document.getElementById("chatContainer");
+    
+        messageInput.addEventListener("input", function () {
+            sendButton.disabled = this.value.trim() === "";
+        });
+
+        function sendMessage() {
+            let message = messageInput.value.trim();
+            if (message === "") return;
+
+            // Mostra il messaggio dell'utente nella chat
+            let userMessage = document.createElement("div");
+            userMessage.className = "user-message";
+            userMessage.textContent = "You: " + message;
+            chatContainer.appendChild(userMessage);
+    
+            fetch("/chat", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ message: message })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log("Risposta ricevuta:", data);
+
+                let botMessage = document.createElement("div");
+                botMessage.className = "bot-message";
+                botMessage.textContent = "Bot: " + data.response;
+                chatContainer.appendChild(botMessage);
+
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            })
+            .catch(error => console.error("Errore:", error));
+
+            messageInput.value = "";
+            sendButton.disabled = true;
+        }
+
+        sendButton.addEventListener("click", sendMessage);
+        messageInput.addEventListener("keypress", function (event) {
+            if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        });
+    });
+</script>
 {% endblock %}

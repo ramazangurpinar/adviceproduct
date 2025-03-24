@@ -9,6 +9,9 @@ import os
 from dotenv import load_dotenv
 from datetime import timedelta
 import json
+import smtplib
+from email.mime.text import MIMEText
+from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
 
 app = Flask(__name__)
 load_dotenv()
@@ -27,6 +30,43 @@ def load_countries():
         return json.load(file)
     
 countries = load_countries()
+
+# Token serializer
+s = URLSafeTimedSerializer(app.secret_key)
+
+def send_reset_email(to_email, token):
+    reset_url = url_for('reset_password', token=token, _external=True)
+    
+    subject = "Reset Your Password"
+    body = f"""Hello,
+
+We received a request to reset your password. Click the link below to choose a new password:
+
+{reset_url}
+
+If you didn’t request this, you can safely ignore this email.
+
+—
+This email was sent automatically by Botify.
+Please do not reply to this message.
+"""
+
+    sender_email = os.getenv("EMAIL_USER")
+    sender_password = os.getenv("EMAIL_PASS")
+
+    message = MIMEText(body)
+    message["Subject"] = subject
+    message["From"] = sender_email
+    message["To"] = to_email
+
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(sender_email, sender_password)
+            server.send_message(message)
+        return True
+    except Exception as e:
+        print("Email send failed:", str(e))
+        return False
 
 def username_exists(form, field):
     cursor = mysql.connection.cursor()
@@ -71,6 +111,14 @@ class EditProfileForm(FlaskForm):
     gender = SelectField('Gender', choices=[('male', 'Male'), ('female', 'Female'), ('other', 'Other')])
     submit = SubmitField('EditProfile')
 
+class ForgotPasswordForm(FlaskForm):
+    email = StringField('Email', validators=[DataRequired()])
+    submit = SubmitField('Send Reset Link')
+
+class ResetPasswordForm(FlaskForm):
+    password = PasswordField('New Password', validators=[DataRequired(), Length(min=6)])
+    confirm_password = PasswordField('Confirm Password', validators=[DataRequired(), Length(min=6)])
+    submit = SubmitField('Reset Password')
 
 # Test database connection
 @app.route('/testdb')
@@ -259,6 +307,54 @@ def delete_profile():
     session.clear()
 
     return redirect(url_for('login'))
+
+@app.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    form = ForgotPasswordForm()
+    message = None
+    if form.validate_on_submit():
+        email = form.email.data
+        cursor = mysql.connection.cursor()
+        cursor.execute("SELECT id FROM users WHERE email = %s", (email,))
+        user = cursor.fetchone()
+        cursor.close()
+
+        if user:
+            token = s.dumps(email, salt='email-reset')
+            send_reset_email(email, token)
+            message = "A password reset link has been sent to your email."
+        else:
+            message = "If this email is registered, a reset link has been sent."
+
+    return render_template('forgot_password.html', form=form, message=message)
+
+@app.route('/reset-password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    try:
+        email = s.loads(token, salt='email-reset', max_age=3600) # 1 hour
+    except SignatureExpired:
+        return "The reset link has expired.", 403
+    except BadSignature:
+        return "Invalid or tampered link.", 403
+
+    form = ResetPasswordForm()
+    if form.validate_on_submit():
+        password = form.password.data
+        confirm_password = form.confirm_password.data
+
+        if password != confirm_password:
+            return render_template('reset_password.html', form=form, error="Passwords do not match.")
+
+        hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+
+        cursor = mysql.connection.cursor()
+        cursor.execute("UPDATE users SET password = %s WHERE email = %s", (hashed_password, email))
+        mysql.connection.commit()
+        cursor.close()
+
+        return redirect(url_for('login'))
+
+    return render_template('reset_password.html', form=form)
 
 @app.route('/logout')
 def logout():

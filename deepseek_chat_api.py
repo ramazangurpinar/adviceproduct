@@ -12,4 +12,4 @@ deepseek = ChatGroq(api_key=api_key, model_name=model)
 parser = StrOutputParser()
 deepseek_chain = deepseek | parser
 
-print(deepseek_chain.invoke("Hello, how are you?"))
+print(deepseek_chain.invoke("What is my favourite color?"))

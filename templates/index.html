@@ -44,8 +44,7 @@
         function sendMessage() {
             let message = messageInput.value.trim();
             if (message === "") return;
-
-            // Mostra il messaggio dell'utente nella chat
+            
             let userMessage = document.createElement("div");
             userMessage.className = "user-message";
             userMessage.textContent = "You: " + message;

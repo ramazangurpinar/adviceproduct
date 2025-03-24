@@ -1,10 +1,8 @@
-# repository: Tech-Watt-Deepseek-simple-Chatbot
-
 from dotenv import load_dotenv
 import os
 import re
 
-
+# repository: Tech-Watt-Deepseek-simple-Chatbot
 def chat(prompt):
     from langchain_groq import ChatGroq
     from langchain_core.output_parsers import StrOutputParser

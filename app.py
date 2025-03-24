@@ -9,7 +9,6 @@ import os
 from dotenv import load_dotenv
 from datetime import timedelta
 import json
-from deepseek import Chatbot
 
 app = Flask(__name__)
 load_dotenv()
@@ -93,7 +92,6 @@ def index():
         username = session.get('username', None)
         fullname = session.get("name", "Guest") + " "+session.get("surname", "")
 
-    chatbot = Chatbot(api_key = getApiKey())
     return render_template('index.html', user_id=user_id, username=username, fullname=fullname)
 
 @app.route('/register', methods=['GET', 'POST'])

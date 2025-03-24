@@ -16,6 +16,14 @@ deepseek_chain = deepseek | parser
 
 
 prompt_init = "List 5 products that suits the following prompt: '"
+user_prompt = "I need a new phone with a good camera and long battery life"
 prompt_end = "' if the request is not a request reguarding a product reply 'I'm sorry but this box is only for the suggestion of products, please insert a new prompt'"
 
-print(deepseek_chain.invoke("Give me an advice on what phone can i buy with a budget of 200 pounds"))
+final_prompt = prompt_init + user_prompt +prompt_end
+print(deepseek_chain.invoke(final_prompt))
+
+category_prompt_init = "Categorise the product that i'm aking: '"
+category_end = "' reply only with one word"
+
+category_final_prompt = category_prompt_init + user_prompt + category_end
+print(deepseek_chain.invoke(category_final_prompt))

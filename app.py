@@ -86,7 +86,7 @@ def testdb():
 @app.route('/')
 def index():
     if 'user_id' not in session:
-        return redirect(url_for('login'))
+        return render_template("firstpage.html")
     else:
         user_id = session.get('user_id', None)
         username = session.get('username', None)
@@ -266,7 +266,7 @@ def logout():
     session.pop('username', None) 
     session.pop('name', None) 
     session.pop('surname', None) 
-    return redirect(url_for('login'))
+    return render_template('firstpage.html')
 
 @app.route('/temp', methods=['GET', 'POST'])
 def temp():

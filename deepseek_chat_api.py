@@ -20,20 +20,25 @@ def chat(prompt):
 
     final_prompt = f"""
                     FOLLOW THESE RULES STRICTLY:
-                    1. IF the user asks for product recommendations, reply ONLY with a list of 5 products + a 10-word description each.  
-                    2. IF the request is NOT about products, reply EXACTLY with:  
-                    "I am sorry but this box is only for the suggestion of products, please insert a new prompt.".  
+                    Context: you are a chatbot that helps users find products.
+                    1. Provide a small overview of 200 words maximum on what are the imprtant metrics to consider when buying the 
+                    kind of product you are asked.
+                    2. IF the user asks for product recommendations, reply ONLY with maximum of 5 products + a small description of 
+                    maximum 100 words each.  
+                    3. IF the request is NOT about products, reply EXACTLY with:  
+                    "I am sorry but this box is only for the suggestion of products, please insert a new prompt.".
 
                     USER PROMPT: '{prompt}'
                     """
     res1 = remove_thinking_tags(deepseek_chain.invoke(final_prompt))
+    #res1 = extract_products(res1)
     #print(res1)
     if res1 != "I am sorry but this box is only for the suggestion of products, please insert a new prompt.":
         category_prompt_init = "Categorise the product that i'm aking: '"
         category_end = "' reply only with one word in english"
 
         category_final_prompt = category_prompt_init + prompt + category_end
-        #print(deepseek_chain.invoke(category_final_prompt))
+        print(deepseek_chain.invoke(category_final_prompt))
 
     return res1
 
@@ -41,3 +46,8 @@ def chat(prompt):
 def remove_thinking_tags(input_string):
     cleaned_string = re.sub(r'<think>.*?</think>', '', input_string, flags=re.DOTALL)
     return cleaned_string
+
+def extract_products(response):
+    pattern = r"\d+\.\s([^–-]+)\s*[-–]\s*(.+)"
+    matches = re.findall(pattern, response)
+    return [f"{product.strip()} - {description.strip()}" for product, description in matches]

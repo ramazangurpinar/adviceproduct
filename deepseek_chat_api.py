@@ -22,20 +22,20 @@ def chat(prompt):
                     FOLLOW THESE RULES STRICTLY:
                     1. IF the user asks for product recommendations, reply ONLY with a list of 5 products + a 10-word description each.  
                     2. IF the request is NOT about products, reply EXACTLY with:  
-                    "I am sorry but this box is only for the suggestion of products, please insert a new prompt".  
+                    "I am sorry but this box is only for the suggestion of products, please insert a new prompt.".  
 
-                USER PROMPT: '{prompt}'
-                """
-    print(final_prompt)
-    res1 = deepseek_chain.invoke(final_prompt)
+                    USER PROMPT: '{prompt}'
+                    """
+    res1 = remove_thinking_tags(deepseek_chain.invoke(final_prompt))
+    #print(res1)
+    if res1 != "I am sorry but this box is only for the suggestion of products, please insert a new prompt.":
+        category_prompt_init = "Categorise the product that i'm aking: '"
+        category_end = "' reply only with one word in english"
 
-    category_prompt_init = "Categorise the product that i'm aking: '"
-    category_end = "' reply only with one word in english"
+        category_final_prompt = category_prompt_init + prompt + category_end
+        #print(deepseek_chain.invoke(category_final_prompt))
 
-    category_final_prompt = category_prompt_init + prompt + category_end
-    print(deepseek_chain.invoke(category_final_prompt))
-
-    return remove_thinking_tags(res1)
+    return res1
 
 
 def remove_thinking_tags(input_string):

@@ -24,7 +24,17 @@
 
                         <div class="mb-3">
                             {{ form.email.label(class="form-label") }}
-                            {{ form.email(class="form-control") }}
+                            {{ form.email(class="form-control bg-light", readonly=True) }}
+                        </div>
+
+                        <div class="mb-3">
+                            {{ form.username.label(class="form-label") }}
+                            <div class="input-group">
+                                {{ form.username(class="form-control bg-light", readonly=True) }}
+                                <a href="{{ url_for('change_username') }}" class="btn btn-outline-primary">
+                                    Change Username
+                                </a>
+                            </div>
                         </div>
 
                         <div class="mb-3">

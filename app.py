@@ -1,10 +1,9 @@
-from flask import Flask, render_template, redirect, url_for, session, request
+from flask import Flask, render_template, redirect, url_for, session, request, jsonify
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField, IntegerField, SelectField
 from wtforms.validators import DataRequired, Length, ValidationError
 import bcrypt
 from flask_mysqldb import MySQL
-from ignore.secret import secretpw
 import os
 from dotenv import load_dotenv
 from datetime import timedelta
@@ -13,16 +12,20 @@ import smtplib
 from email.mime.text import MIMEText
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
 from jinja2 import Template
-from datetime import datetime
 from log_types import LogType
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
+
 
 app = Flask(__name__)
 load_dotenv()
 
+# Google OAuth Configuration
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 app.secret_key = os.getenv('SECRET_KEY', 'fallback-secret-key')
 app.config['MYSQL_HOST'] = 'localhost'  # host address of the database
 app.config['MYSQL_USER'] = 'root'  # username of the database
-app.config['MYSQL_PASSWORD'] = secretpw()  # password of the database
+app.config['MYSQL_PASSWORD'] = os.getenv("MYSQL_PASSWORD")  # password of the database
 app.config['MYSQL_DB'] = 'productadvice'  # database name
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)  # session timeout
 
@@ -36,6 +39,15 @@ countries = load_countries()
 
 # Token serializer
 s = URLSafeTimedSerializer(app.secret_key)
+
+def get_db_connection():
+    """Ensure the MySQL connection is active before using it."""
+    if mysql.connection.open:
+        return mysql.connection
+    else:
+        mysql.connection.ping(reconnect=True)
+        return mysql.connection
+
 
 def log_action(log_type: LogType, message, user_id=None):
     cursor = mysql.connection.cursor()
@@ -255,6 +267,7 @@ def login():
             session['username'] = user[1]
             session['name'] = user[3]
             session['surname'] = user[4]
+            session['is_google_user'] = False
             session.permanent = True
             log_action(LogType.USER_LOGGED_IN, f"User logged in: {username}", user_id=user[0])
             return redirect(url_for('index'))
@@ -264,6 +277,86 @@ def login():
 
     return render_template('login.html', form=form, error=error_message)
 
+@app.route('/login/google', methods=['POST'])
+def google_login():
+    try:
+        token = request.json.get('token')
+
+        id_info = id_token.verify_oauth2_token(
+            token,
+            google_requests.Request(),
+            GOOGLE_CLIENT_ID
+        )
+
+        # Get user information
+        email = id_info.get('email')
+        first_name = id_info.get('given_name', '')
+        last_name = id_info.get('family_name', '')
+
+        # If Google has not sent family_name or given_name, split from name
+        if not first_name or not last_name:
+            full_name = id_info.get('name', '')
+            name_parts = full_name.split(' ', 1)
+            first_name = first_name or name_parts[0]
+            last_name = last_name or (name_parts[1] if len(name_parts) > 1 else '')
+
+        # user exist in database?
+        cursor = get_db_connection().cursor()
+        cursor.execute("SELECT id, username, name, surname FROM users WHERE email = %s", (email,))
+        existing_user = cursor.fetchone()
+
+        if existing_user:
+            # create session for existing user
+            session['user_id'] = existing_user[0]
+            session['username'] = existing_user[1]
+            session['name'] = existing_user[2]
+            session['surname'] = existing_user[3]
+        else:
+            # create a new username
+            base_username = email.split('@')[0]
+            username = base_username
+            counter = 1
+
+            while True:
+                cursor.execute("SELECT id FROM users WHERE username = %s", (username,))
+                if not cursor.fetchone():
+                    break
+                username = f"{base_username}{counter}"
+                counter += 1
+
+            cursor.execute("""
+                INSERT INTO users (name, surname, username, email, country, age, gender)
+                VALUES (%s, %s, %s, %s, 'US', 18, 'other')
+            """, (first_name, last_name, username, email))
+            mysql.connection.commit()
+
+            send_email_from_template("GOOGLE_LOGIN", email, {"username": username})
+
+            cursor.execute("SELECT id FROM users WHERE email = %s", (email,))
+            new_user = cursor.fetchone()
+
+            session['user_id'] = new_user[0]
+            session['username'] = username
+            session['name'] = first_name
+            session['surname'] = last_name
+
+        session['is_google_user'] = True
+        session.permanent = True
+
+        log_action(
+            LogType.GOOGLE_LOGIN,
+            f"User logged in via Google: {session['username']}",
+            user_id=session['user_id']
+        )
+
+        cursor.close()
+        return jsonify({'redirect': url_for('index')})
+
+    except ValueError:
+        return jsonify({'error': 'Invalid Google ID token'}), 400
+    except Exception as e:
+        print(f"Google OAuth Error: {str(e)}")
+        return jsonify({'error': 'Authentication failed'}), 500
 
 def get_country_name(country_code):
     countries = load_countries()  
@@ -346,6 +439,9 @@ def change_username():
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
+    if session.get('is_google_user'):
+        return "Google users cannot change their username.", 403
+    
     form = ChangeUsernameForm()
     error_message = None
 
@@ -442,12 +538,18 @@ def forgot_password():
     if form.validate_on_submit():
         email = form.email.data
         cursor = mysql.connection.cursor()
-        cursor.execute("SELECT id FROM users WHERE email = %s", (email,))
+        cursor.execute("SELECT id, password FROM users WHERE email = %s", (email,))
         user = cursor.fetchone()
         cursor.close()
 
         if user:
-            user_id = user[0]
+            user_id, password_hash = user
+
+            # Prevent Google users from resetting password
+            if password_hash is None:
+                message = "Google users cannot reset password. Please use Google Sign-In to log in."
+                return render_template('forgot_password.html', form=form, message=message)
+
             token = s.dumps(email, salt='email-reset')
             reset_url = url_for('reset_password', token=token, _external=True)
             send_email_from_template("RESETPASSWORD", email, {"reset_url": reset_url})
@@ -458,14 +560,29 @@ def forgot_password():
 
     return render_template('forgot_password.html', form=form, message=message)
 
+
 @app.route('/reset-password/<token>', methods=['GET', 'POST'])
 def reset_password(token):
     try:
-        email = s.loads(token, salt='email-reset', max_age=3600) # 1 hour
+        email = s.loads(token, salt='email-reset', max_age=3600)  # 1 hour
     except SignatureExpired:
         return "The reset link has expired.", 403
     except BadSignature:
         return "Invalid or tampered link.", 403
+
+    # Check if the user is a Google account user
+    cursor = mysql.connection.cursor()
+    cursor.execute("SELECT id, password FROM users WHERE email = %s", (email,))
+    user = cursor.fetchone()
+    cursor.close()
+
+    if not user:
+        return "User not found.", 404
+
+    user_id, password_hash = user
+
+    if password_hash is None:
+        return "Google users cannot reset password.", 403
 
     form = ResetPasswordForm()
     if form.validate_on_submit():
@@ -478,26 +595,22 @@ def reset_password(token):
         hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
 
         cursor = mysql.connection.cursor()
-        cursor.execute("UPDATE users SET password = %s WHERE email = %s", (hashed_password, email))
+        cursor.execute("UPDATE users SET password = %s WHERE id = %s", (hashed_password, user_id))
         mysql.connection.commit()
 
-        cursor = mysql.connection.cursor()
-        cursor.execute("SELECT id, username, name, surname FROM users WHERE email = %s", (email,))
+        cursor.execute("SELECT username, name, surname FROM users WHERE id = %s", (user_id,))
         user_data = cursor.fetchone()
         cursor.close()
 
         if user_data:
-            # Unpack user data
-            user_id, username, name, surname = user_data
-
-            # Create session
+            username, name, surname = user_data
             session['user_id'] = user_id
             session['username'] = username
             session['name'] = name
             session['surname'] = surname
+            session['is_google_user'] = False
             session.permanent = True
 
-            # Send email to confirm password change
             send_email_from_template("PASSWORDCHANGED", email, {"username": username})
             log_action(LogType.PASSWORD_CHANGED, f"Password successfully changed for user: {username}", user_id=user_id)
 
@@ -512,6 +625,7 @@ def logout():
     session.pop('username', None) 
     session.pop('name', None) 
     session.pop('surname', None)
+    session.pop('is_google_user', None)
     return redirect(url_for('login'))
 
 @app.route('/temp', methods=['GET', 'POST'])

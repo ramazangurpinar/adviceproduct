@@ -35,6 +35,7 @@
     </div>
     {% endif %}
 
+    <!-- Classic Login Form -->
     <form action="/login" method="POST">
       {{ form.hidden_tag() }}
 
@@ -70,25 +71,94 @@
           </ul>
         {% endif %}
       </div>
-      
+
       <div class="text-right mt-2 mb-3">
         <a href="{{ url_for('forgot_password') }}">Forgot your password?</a>
       </div>
 
-      <!-- Submit & Link -->
+      <!-- Submit Button -->
       <div class="text-center">
         {{ form.submit(class="btn btn-success btn-block mt-3") }}
-        <a href="{{ url_for('register') }}" class="d-inline-flex align-items-center mt-3">
-          <img src="{{ url_for('static', filename='image/register.png') }}" alt="Register Icon" class="img-fluid mr-2" width="20" height="20">
-          <span>You don't have an account?</span>
-        </a>
       </div>
+
     </form>
+
+    <!-- Divider -->
+    <div class="d-flex align-items-center my-3">
+      <hr class="flex-grow-1">
+      <span class="mx-2 text-muted">or</span>
+      <hr class="flex-grow-1">
+    </div>
+
+    <!-- Google Sign-In Button -->
+    <div id="g_id_onload"
+         data-client_id="679262742941-lceb5js6762hrea7ol9mj681o0i7lu5q.apps.googleusercontent.com"
+         data-callback="handleCredentialResponse"
+         data-auto_prompt="false">
+    </div>
+    <div class="g_id_signin"
+         data-type="standard"
+         data-shape="rectangular"
+         data-theme="outline"
+         data-text="signin_with"
+         data-size="large"
+         data-logo_alignment="left"
+         style="width: 100%;">
+    </div>
+
+    <!-- Register link -->
+    <div class="text-center mt-3">
+      <a href="{{ url_for('register') }}" class="d-inline-flex align-items-center">
+        <img src="{{ url_for('static', filename='image/register.png') }}" alt="Register Icon" class="img-fluid mr-2" width="20" height="20">
+        <span>You don't have an account?</span>
+      </a>
+    </div>
+
   </div>
 </div>
 
-<!-- External JavaScript -->
+<!-- Google Identity Services -->
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script>
+  function handleCredentialResponse(response) {
+    fetch("/login/google", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ token: response.credential })
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.redirect) {
+        window.location.href = data.redirect;
+      } else if (data.error) {
+        alert(data.error);
+      }
+    })
+    .catch(error => {
+      console.error("Google Login failed:", error);
+    });
+  }
+
+  // Optional: toggle password visibility
+  document.addEventListener('DOMContentLoaded', function () {
+    const toggleButton = document.getElementById('togglePassword');
+    const passwordInput = document.getElementById('password');
+    const toggleIcon = document.getElementById('toggleIcon');
+
+    toggleButton.addEventListener('click', function () {
+      const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+      passwordInput.setAttribute('type', type);
+      toggleIcon.classList.toggle('fa-eye');
+      toggleIcon.classList.toggle('fa-eye-slash');
+    });
+  });
+</script>
+
+<!-- Custom JS -->
 <script src="{{ url_for('static', filename='js/form.js') }}"></script>
 
 </body>
 </html>
+<!-- End of templates/login.html -->

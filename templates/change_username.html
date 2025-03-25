@@ -1,0 +1,46 @@
+{% extends "master.html" %}
+
+{% block title %}Change Username - Botify{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6 col-lg-5">
+            <div class="card shadow-sm rounded">
+                <div class="card-body">
+                    <h4 class="card-title text-center mb-4">Change Username</h4>
+
+                    <form method="POST">
+                        {{ form.hidden_tag() }}
+
+                        <div class="mb-3">
+                            {{ form.email.label(class="form-label") }}
+                            {{ form.email(class="form-control", placeholder="Enter your email") }}
+                        </div>
+
+                        <div class="mb-3">
+                            {{ form.password.label(class="form-label") }}
+                            {{ form.password(class="form-control", placeholder="Enter your current password") }}
+                        </div>
+
+                        <div class="mb-3">
+                            {{ form.new_username.label(class="form-label") }}
+                            {{ form.new_username(class="form-control", placeholder="Enter your new username") }}
+                        </div>
+
+                        <div class="d-grid">
+                            {{ form.submit(class="btn btn-primary") }}
+                        </div>
+                    </form>
+
+                    {% if error %}
+                    <div class="alert alert-danger mt-3 mb-0" role="alert">
+                        {{ error }}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

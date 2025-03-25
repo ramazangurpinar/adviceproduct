@@ -24,7 +24,23 @@
 
                         <div class="mb-3">
                             {{ form.email.label(class="form-label") }}
-                            {{ form.email(class="form-control") }}
+                            {{ form.email(class="form-control bg-light", readonly=True) }}
+                        </div>
+
+                        <div class="mb-3">
+                            {{ form.username.label(class="form-label") }}
+                            <div class="input-group">
+                                {{ form.username(class="form-control bg-light", readonly=True) }}
+                                {% if not session.get('is_google_user') %}
+                                <a href="{{ url_for('change_username') }}" class="btn btn-outline-primary">
+                                    Change Username
+                                </a>
+                                {% else %}
+                                <button class="btn btn-outline-secondary" disabled title="Google users cannot change username">
+                                    Change Username
+                                </button>
+                                {% endif %}
+                            </div>
                         </div>
 
                         <div class="mb-3">

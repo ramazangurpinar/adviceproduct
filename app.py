@@ -1,7 +1,7 @@
 from flask import Flask, render_template, redirect, url_for, session, request, jsonify
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField, IntegerField, SelectField
-from wtforms.validators import DataRequired, Length, ValidationError
+from wtforms.validators import DataRequired, Length, ValidationError, Optional
 import bcrypt
 from flask_mysqldb import MySQL
 import os
@@ -31,11 +31,21 @@ app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)  # session time
 
 mysql = MySQL(app)
 
-def load_countries():
-    with open("static/countries.json", "r", encoding="utf-8") as file:
-        return json.load(file)
-    
-countries = load_countries()
+def load_countries_from_db():
+    cursor = mysql.connection.cursor()
+    cursor.execute("SELECT code, name FROM countries ORDER BY name")
+    countries = cursor.fetchall()
+    cursor.close()
+    return [{"code": code, "name": name} for code, name in countries]
+
+def get_country_name(country_code):
+    if not country_code:
+        return None    
+    countries = load_countries_from_db()
+    for country in countries:
+        if country['code'] == country_code:
+            return country['name']
+    return country_code
 
 # Token serializer
 s = URLSafeTimedSerializer(app.secret_key)
@@ -141,9 +151,9 @@ class RegistrationForm(FlaskForm):
     username = StringField('Username', validators=[DataRequired(), Length(min=4, max=50), username_exists])
     email = StringField('Email', validators=[DataRequired(), Length(min=4, max=50), email_exists])
     password = PasswordField('Password', validators=[DataRequired(), Length(min=6, max=20)])
-    country = SelectField('Country', choices=[(c["code"], c["name"]) for c in countries], validators=[DataRequired()])
-    age = IntegerField('Age', validators=[DataRequired()])
-    gender = SelectField('Gender', choices=[('male', 'Male'), ('female', 'Female'), ('other', 'Other')], validators=[DataRequired()])
+    country = SelectField('Country', choices=[], validate_choice=False)
+    age = IntegerField('Age', validators=[Optional()])
+    gender = SelectField('Gender', choices=[], validate_choice=False)
     submit = SubmitField('Register')
 
 class LoginForm(FlaskForm):
@@ -156,9 +166,9 @@ class EditProfileForm(FlaskForm):
     surname = StringField('Surname', validators=[DataRequired(), Length(min=2, max=50)])
     username = StringField('Username', validators=[Length(min=4, max=50)])
     email = StringField('Email', validators=[DataRequired(), Length(min=5, max=50)])
-    country = SelectField('Country', choices=[(c["code"], c["name"]) for c in countries], validators=[DataRequired()])
-    age = IntegerField('Age')
-    gender = SelectField('Gender', choices=[('male', 'Male'), ('female', 'Female'), ('other', 'Other')])
+    country = SelectField('Country', choices=[], validate_choice=False)
+    age = IntegerField('Age', validators=[Optional()])
+    gender = SelectField('Gender', choices=[], validate_choice=False)
     submit = SubmitField('EditProfile')
     change_username = SubmitField('Change Username')
 
@@ -200,12 +210,15 @@ def index():
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
+    countries = load_countries_from_db()    
     session.pop('user_id', None)  
     session.pop('username', None)
     session.pop('name', None)  
     session.pop('surname', None)
     form = RegistrationForm()
     form.submit.label.text = "Sign Up"
+    form.country.choices = [('', '-- Select --')] + [(c["code"], c["name"]) for c in countries] 
+    form.gender.choices = [('', '-- Select --'), ('male', 'Male'), ('female', 'Female'), ('other', 'Other')]
 
     if form.validate_on_submit():
         name = form.name.data
@@ -213,9 +226,9 @@ def register():
         username = form.username.data
         email = form.email.data
         password = form.password.data
-        country = form.country.data
-        age = form.age.data
-        gender = form.gender.data
+        country = form.country.data or None
+        age = form.age.data or None
+        gender = form.gender.data or None
 
         hashed_password = bcrypt.hashpw(password.encode('utf-8'),bcrypt.gensalt())
 
@@ -237,6 +250,7 @@ def register():
         session.permanent = True        
 
         log_action(LogType.USER_REGISTERED, f"New user registered: {username}", user_id=user[0])
+        send_email_from_template("WELCOME", email, {"username": username,"name": name})
         return redirect(url_for('register_success'))
 
     return render_template('register.html', form=form)
@@ -326,8 +340,9 @@ def google_login():
 
             cursor.execute("""
                 INSERT INTO users (name, surname, username, email, country, age, gender)
-                VALUES (%s, %s, %s, %s, 'US', 18, 'other')
-            """, (first_name, last_name, username, email))
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, (first_name, last_name, username, email, None, None, None))
+
             mysql.connection.commit()
 
             send_email_from_template("GOOGLE_LOGIN", email, {"username": username})
@@ -358,11 +373,6 @@ def google_login():
         print(f"Google OAuth Error: {str(e)}")
         return jsonify({'error': 'Authentication failed'}), 500
 
-def get_country_name(country_code):
-    countries = load_countries()  
-    country_dict = {item["code"]: item["name"] for item in countries}
-    return country_dict.get(country_code, country_code) 
-
 @app.route('/profile')
 def profile():
     if 'user_id' not in session:
@@ -380,7 +390,7 @@ def profile():
 
     user = list(user)
     user[1] = get_country_name(user[1])
-    user[5] = user[5].capitalize()
+    user[5] = user[5].capitalize() if user[5] else None
     return render_template('profile.html', user=user)
 
 
@@ -388,14 +398,16 @@ def profile():
 def edit_profile():
     if 'user_id' not in session:
         return redirect(url_for('login'))
-
     user_id = session['user_id']
-
-    form = EditProfileForm()
+    countries = load_countries_from_db()
+    form = EditProfileForm() 
+    form.country.choices = [('', '-- Select --')] + [(c["code"], c["name"]) for c in countries]
+    form.gender.choices = [('', '-- Select --'), ('male', 'Male'), ('female', 'Female'), ('other', 'Other')]
 
     cursor = mysql.connection.cursor()
 
     if request.method == 'GET':
+        print("GET Request")
         cursor.execute("SELECT name, surname, country, age, gender, email, username FROM users WHERE id = %s", (user_id,))
         user_data = cursor.fetchone()
         cursor.close()
@@ -415,9 +427,9 @@ def edit_profile():
         name = form.name.data
         surname = form.surname.data
         email = form.email.data
-        country = form.country.data
-        age = form.age.data
-        gender = form.gender.data
+        country = form.country.data or None
+        age = int(form.age.data) if form.age.data else None
+        gender = form.gender.data or None        
 
         cursor.execute("""
             UPDATE users 
@@ -559,7 +571,6 @@ def forgot_password():
             message = "If this email is registered, a reset link has been sent."
 
     return render_template('forgot_password.html', form=form, message=message)
-
 
 @app.route('/reset-password/<token>', methods=['GET', 'POST'])
 def reset_password(token):

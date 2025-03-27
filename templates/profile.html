@@ -28,18 +28,18 @@
             <hr>
             <div class="d-flex justify-content-between">
               <span class="font-weight-bold">Country:</span>
-              <span>{{ user[1] }}</span>
+              <span>{{ user[1] if user[1] else '—' }}</span>
             </div>
             <hr>
             <div class="d-flex justify-content-between">
               <span class="font-weight-bold">Age:</span>
-              <span>{{ user[4] }}</span>
+              <span>{{ user[4] if user[4] else '—' }}</span>
             </div>
             <hr>
             <div class="d-flex justify-content-between">
               <span class="font-weight-bold">Gender:</span>
-              <span>{{ user[5] }}</span>
-            </div>
+              <span>{{ user[5] if user[5] else '—' }}</span>
+            </div>            
         </div>
 
         <div class="text-center mt-4">

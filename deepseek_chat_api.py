@@ -52,5 +52,7 @@ def remove_thinking_tags(input_string):
     return cleaned_string
 
 def separate_bot_messages(response):
+    print(response) ### COMMENT LATER
     l = [segment.strip().replace("querty", "") for segment in response.split("querty") if segment.strip()]
+    print(l) ### COMMENT LATER
     return l

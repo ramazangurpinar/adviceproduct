@@ -104,16 +104,18 @@ def chat_route():
     if user_message:
 
         bot_response, title = chat(user_message)
-
         cur = mysql.connection.cursor()
+
         # Insert conversation in DB
         cur.execute("INSERT INTO conversations (user_id, title) VALUES (%s, %s)", (user_id, title))
         # Get the conversation id
         conversation_id = cur.lastrowid
         # User
         cur.execute("INSERT INTO messages (conversation_id, sender_type, content, sent_at) VALUES (%s, %s, %s, NOW())",(conversation_id, "user", user_message))
+        
         # Bot
-        cur.execute("INSERT INTO messages (conversation_id, sender_type, content, sent_at) VALUES (%s, %s, %s, NOW())",(conversation_id, "bot", bot_response))
+        for i in bot_response:
+            cur.execute("INSERT INTO messages (conversation_id, sender_type, content, sent_at) VALUES (%s, %s, %s, NOW())",(conversation_id, "bot", i))
         
         mysql.connection.commit()
         return jsonify({'response': bot_response})

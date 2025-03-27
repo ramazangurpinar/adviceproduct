@@ -27,10 +27,13 @@ def chat(prompt):
                     maximum 100 words each.  
                     3. IF the request is NOT about products, reply EXACTLY with:  
                     "I am sorry but this box is only for the suggestion of products, please insert a new prompt.".
+                    4. All the product suggestion should have the following format: "Separator - Product name - Description" Where Sepearator = "querty"
 
                     USER PROMPT: '{prompt}'
                     """
-    res1 = remove_thinking_tags(deepseek_chain.invoke(final_prompt))
+    res_string = remove_thinking_tags(deepseek_chain.invoke(final_prompt))
+    res1 = separate_bot_messages(res_string)
+    print(res1)
     #res1 = extract_products(res1)
     #print(res1)
     if res1 != "I am sorry but this box is only for the suggestion of products, please insert a new prompt.":
@@ -48,7 +51,6 @@ def remove_thinking_tags(input_string):
     cleaned_string = re.sub(r'<think>.*?</think>', '', input_string, flags=re.DOTALL)
     return cleaned_string
 
-def extract_products(response):
-    pattern = r"\d+\.\s([^–-]+)\s*[-–]\s*(.+)"
-    matches = re.findall(pattern, response)
-    return [f"{product.strip()} - {description.strip()}" for product, description in matches]
+def separate_bot_messages(response):
+    l = [segment.strip().replace("querty", "") for segment in response.split("querty") if segment.strip()]
+    return l

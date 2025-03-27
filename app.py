@@ -12,6 +12,7 @@ import smtplib
 from email.mime.text import MIMEText
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
 from jinja2 import Template
+from deepseek_chat_api import chat
 from log_types import LogType
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
@@ -207,6 +208,33 @@ def index():
         username = session.get('username', None)
         fullname = session.get("name", "Guest") + " "+session.get("surname", "")
     return render_template('index.html', user_id=user_id, username=username, fullname=fullname)
+
+@app.route('/chat', methods=['POST'])
+def chat_route():
+    user_id = session.get('user_id', None)
+    data = request.get_json()
+    user_message = data.get('message')
+
+    if user_message:
+
+        bot_response, title = chat(user_message)
+        cur = mysql.connection.cursor()
+
+        # Insert conversation in DB
+        cur.execute("INSERT INTO conversations (user_id, title) VALUES (%s, %s)", (user_id, title))
+        # Get the conversation id
+        conversation_id = cur.lastrowid
+        # User
+        cur.execute("INSERT INTO messages (conversation_id, sender_type, content, sent_at) VALUES (%s, %s, %s, NOW())",(conversation_id, "user", user_message))
+        
+        # Bot
+        for i in bot_response:
+            cur.execute("INSERT INTO messages (conversation_id, sender_type, content, sent_at) VALUES (%s, %s, %s, NOW())",(conversation_id, "bot", i))
+        
+        mysql.connection.commit()
+        return jsonify({'response': bot_response})
+
+    return jsonify({'error': 'No message received'}), 400
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():

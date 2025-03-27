@@ -3,58 +3,564 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Botify</title>
+    <title>Botify - AI Shopping Advisor</title>
+    <meta name="description" content="Get personalized product recommendations with Botify's AI shopping assistant">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='image/favicon.ico') }}">
+    <style>
+        :root {
+            --botify-green: #6B8E7F;  /* Subtle sage green */
+            --botify-dark: #556B5D;   /* Darker muted green */
+            --botify-light: #9DB4A8;  /* Soft light green */
+            --botify-lighter: #E8ECE9; /* Very light background */
+            --botify-accent: #7A9D8B; /* Accent green */
+        }
+        
+        body {
+            background-color: #f9f9f9;
+            position: relative;
+            overflow-x: hidden;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            line-height: 1.6;
+            color: #333;
+        }
+        
+        @supports (font-variation-settings: normal) {
+            body { font-family: 'Inter var', -apple-system, BlinkMacSystemFont, sans-serif; }
+        }
+        
+        /* Modern background pattern */
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(107, 142, 127, 0.03) 0%, transparent 25%),
+                radial-gradient(circle at 85% 30%, rgba(107, 142, 127, 0.03) 0%, transparent 25%);
+            background-size: 100% 100%;
+            z-index: -1;
+        }
+        
+        /* Smooth scroll behavior */
+        html {
+            scroll-behavior: smooth;
+        }
+        
+        /* Navigation */
+        .navbar {
+            padding: 1rem 0;
+            box-shadow: 0 2px 20px rgba(0,0,0,0.05);
+            background-color: rgba(255,255,255,0.95) !important;
+            backdrop-filter: blur(10px);
+        }
+        
+        .navbar-brand {
+            font-weight: 700;
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+        }
+        
+        .navbar-brand i {
+            margin-right: 0.5rem;
+            color: var(--botify-green);
+        }
+        
+        /* Hero Section */
+        .hero-section {
+            background: 
+                linear-gradient(135deg, rgba(107, 142, 127, 0.9) 0%, rgba(85, 107, 93, 0.9) 100%),
+                url('https://images.unsplash.com/photo-1620712943543-bcc4688e7485?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80');
+            background-size: cover;
+            background-position: center;
+            padding: 8rem 0 6rem;
+            color: white;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .hero-section h1 {
+            font-weight: 800;
+            font-size: 3.5rem;
+            margin-bottom: 1.5rem;
+            line-height: 1.2;
+        }
+        
+        .hero-section .lead {
+            font-size: 1.5rem;
+            font-weight: 300;
+            margin-bottom: 2rem;
+            opacity: 0.9;
+        }
+        
+        /* Floating shapes */
+        .floating-shape {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(30px);
+            opacity: 0.15;
+            z-index: 0;
+        }
+        
+        .shape-1 {
+            width: 300px;
+            height: 300px;
+            background-color: var(--botify-green);
+            top: -100px;
+            left: -100px;
+        }
+        
+        .shape-2 {
+            width: 400px;
+            height: 400px;
+            background-color: var(--botify-dark);
+            bottom: -150px;
+            right: -150px;
+        }
+        
+        /* Sections */
+        .section {
+            padding: 6rem 0;
+            position: relative;
+        }
+        
+        .section-title {
+            font-weight: 700;
+            margin-bottom: 3rem;
+            position: relative;
+            display: inline-block;
+        }
+        
+        .section-title:after {
+            content: '';
+            position: absolute;
+            bottom: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60px;
+            height: 3px;
+            background-color: var(--botify-green);
+        }
+        
+        /* Cards */
+        .card {
+            border: none;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+            transition: all 0.3s ease;
+            height: 100%;
+        }
+        
+        .card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.1);
+        }
+        
+        .feature-card {
+            border-top: 4px solid var(--botify-green);
+        }
+        
+        .custom-card {
+            border-left: 4px solid var(--botify-green);
+        }
+        
+        /* Icons */
+        .icon-wrapper {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background-color: rgba(107, 142, 127, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1.5rem;
+        }
+        
+        .icon-wrapper i {
+            font-size: 2rem;
+            color: var(--botify-green);
+        }
+        
+        /* Buttons */
+        .btn {
+            font-weight: 500;
+            padding: 0.75rem 1.75rem;
+            border-radius: 50px;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-sage {
+            background-color: var(--botify-green);
+            border-color: var(--botify-green);
+            color: white;
+        }
+        
+        .btn-sage:hover {
+            background-color: var(--botify-dark);
+            border-color: var(--botify-dark);
+            color: white;
+            transform: translateY(-3px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+        
+        .btn-outline-sage {
+            border-color: var(--botify-green);
+            color: var(--botify-green);
+        }
+        
+        .btn-outline-sage:hover {
+            background-color: var(--botify-green);
+            color: white;
+        }
+        
+        /* Chat Section */
+        .botify-chat {
+            background-color: var(--botify-lighter);
+        }
+        
+        .chat-card {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.08);
+            padding: 2.5rem;
+            position: relative;
+            overflow: hidden;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        .chat-card:before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 5px;
+            background: linear-gradient(90deg, var(--botify-green), var(--botify-dark));
+        }
+        
+        .robot-avatar {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, var(--botify-green), var(--botify-dark));
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1.5rem;
+            color: white;
+            font-size: 2rem;
+        }
+        
+        /* Footer */
+        .footer {
+            background: linear-gradient(135deg, var(--botify-dark), #475E52);
+            color: white;
+            padding: 5rem 0 3rem;
+        }
+        
+        .footer a {
+            color: var(--botify-light);
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+        
+        .footer a:hover {
+            color: white;
+        }
+        
+        .social-icons a {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: rgba(255,255,255,0.1);
+            margin: 0 0.5rem;
+            transition: all 0.3s ease;
+        }
+        
+        .social-icons a:hover {
+            background-color: var(--botify-green);
+            transform: translateY(-3px);
+        }
+        
+        /* Animations */
+        .animate-delay-1 {
+            animation-delay: 0.2s;
+        }
+        
+        .animate-delay-2 {
+            animation-delay: 0.4s;
+        }
+        
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .hero-section {
+                padding: 6rem 0 4rem;
+            }
+            
+            .hero-section h1 {
+                font-size: 2.5rem;
+            }
+            
+            .section {
+                padding: 4rem 0;
+            }
+        }
+    </style>
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-white fixed-top">
         <div class="container">
-            <a class="navbar-brand" href="#">BOTIFY</a>
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-robot"></i>BOTIFY
+            </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
-                    <li class="nav-item"><a class="nav-link" href="{{ url_for('login') }}">Login</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{{ url_for('register') }}">Register</a></li>
+                    <li class="nav-item"><a class="nav-link" href="#features">Features</a></li>
+                    <li class="nav-item"><a class="nav-link" href="#how-it-works">How It Works</a></li>
+                    <li class="nav-item"><a class="nav-link" href="#chat">Chat</a></li>
                 </ul>
+                <div class="d-flex ms-lg-3 mt-3 mt-lg-0">
+                    <a href="{{ url_for('login') }}" class="btn btn-outline-sage me-2">Login</a>
+                    <a href="{{ url_for('register') }}" class="btn btn-sage">Register</a>
+                </div>
             </div>
         </div>
     </nav>
     
-    <header class="bg-primary text-white text-center py-5">
-        <h1>Get what's best for you</h1>
-    </header>
-    
-    <div class="container my-5">
-        <h2 class="text-center">What We Offer</h2>
-        <div class="row text-center">
-            <div class="col-md-4">
-                <h4>Personal Advisor</h4>
-            </div>
-            <div class="col-md-4">
-                <h4>Best Brands</h4>
-            </div>
-            <div class="col-md-4">
-                <h4>Easy and Effective Search</h4>
+    <!-- Hero Section -->
+    <section class="hero-section">
+        <div class="floating-shape shape-1"></div>
+        <div class="floating-shape shape-2"></div>
+        <div class="container position-relative">
+            <div class="row justify-content-center">
+                <div class="col-lg-8">
+                    <h1 class="animate__animated animate__fadeInDown">Advice product</h1>
+                    <p class="lead animate__animated animate__fadeIn animate__delay-1s">Get personalized product recommendations for you</p>
+                    <div class="d-flex justify-content-center gap-3 animate__animated animate__fadeIn animate__delay-2s">
+                        <a href="#chat" class="btn btn-light btn-lg px-4">
+                            <i class="fas fa-comment-dots me-2"></i>Try Botify
+                        </a>
+                        <a href="#features" class="btn btn-outline-light btn-lg px-4">
+                            <i class="fas fa-info-circle me-2"></i>Learn More
+                        </a>
+                    </div>
+                </div>
             </div>
         </div>
-    </div>
+    </section>
     
-    <div class="container text-center my-5">
-        <h3>Find the product nearest to you</h3>
-        <p>Customized to your needs</p>
-        <a href="{{ url_for('login') }}" class="btn btn-primary mx-2">Login</a>
-        <a href="{{ url_for('register') }}" class="btn btn-success mx-2">Register</a>
-    </div>
+    <!-- Features Section -->
+    <section id="features" class="section">
+        <div class="container">
+            <h2 class="text-center section-title animate__animated animate__fadeIn">What We Offer</h2>
+            <div class="row g-4">
+                <div class="col-md-4">
+                    <div class="card feature-card animate__animated animate__fadeInUp">
+                        <div class="card-body text-center p-4">
+                            <div class="icon-wrapper">
+                                <i class="fas fa-robot"></i>
+                            </div>
+                            <h3 class="h4">Personal Advisor</h3>
+                            <p class="mb-0">AI-powered recommendation for your preferences, budget, and needs.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card feature-card animate__animated animate__fadeInUp animate-delay-1">
+                        <div class="card-body text-center p-4">
+                            <div class="icon-wrapper">
+                                <i class="fas fa-search"></i>
+                            </div>
+                            <h3 class="h4">Smart Search</h3>
+                            <p class="mb-0">Find exactly what you need with our intuitive, AI-enhanced search technology.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card feature-card animate__animated animate__fadeInUp animate-delay-2">
+                        <div class="card-body text-center p-4">
+                            <div class="icon-wrapper">
+                                <i class="fas fa-award"></i>
+                            </div>
+                            <h3 class="h4">Premium Brands</h3>
+                            <p class="mb-0">Curated selection of top-quality products from trusted brands you'll love.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
     
-    <footer class="bg-dark text-white text-center py-4">
-        <p>Oxford Brookes University, Headington Rd, Headington, Oxford OX3 0BP</p>
-        <p>Call: 07887729086 | Email: botify@gmail.com</p>
-        <p>Business Hours: Mon-Sat 8:00 AM - 8:00 PM | Sun 12:00 PM - 8:00 PM</p>
+    <!-- Customization Section -->
+    <section id="how-it-works" class="section bg-light">
+        <div class="container">
+            <h2 class="text-center section-title animate__animated animate__fadeIn">Customized to Your Needs</h2>
+            <div class="row g-4">
+                <div class="col-md-4">
+                    <div class="card custom-card animate__animated animate__fadeInLeft">
+                        <div class="card-body p-4">
+                            <h3 class="h4"><i class="fas fa-tag me-2" style="color: var(--botify-green)"></i>Price Range</h3>
+                            <p class="mb-0">Find products that fit comfortably within your specified budget.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card custom-card animate__animated animate__fadeInUp">
+                        <div class="card-body p-4">
+                            <h3 class="h4"><i class="fas fa-star me-2" style="color: var(--botify-green)"></i>Brand Preferences</h3>
+                            <p class="mb-0">Choose your favorite brands or discover new premium options.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card custom-card animate__animated animate__fadeInRight">
+                        <div class="card-body p-4">
+                            <h3 class="h4"><i class="fas fa-map-marker-alt me-2" style="color: var(--botify-green)"></i>Local Availability</h3>
+                            <p class="mb-0">Get products available near you or with the fastest shipping options.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Chat Section -->
+    <section id="chat" class="section botify-chat">
+        <div class="container">
+            <div class="row justify-content-center">
+                <div class="col-lg-8">
+                    <div class="chat-card animate__animated animate__fadeInUp">
+                        <div class="robot-avatar">
+                            <i class="fas fa-robot"></i>
+                        </div>
+                        <h2 class="text-center mb-3">Hi there! I'm Botify</h2>
+                        <p class="text-center lead text-muted mb-4">I can help you find the perfect products based on your needs and preferences.</p>
+                        <div class="d-flex justify-content-center gap-3">
+                            <a href="{{ url_for('login') }}" class="btn btn-sage btn-lg px-4">
+                                <i class="fas fa-comment-dots me-2"></i>Message Me
+                            </a>
+                            <a href="{{ url_for('register') }}" class="btn btn-outline-sage btn-lg px-4">
+                                <i class="fas fa-user-plus me-2"></i>Register
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-4 mb-4 mb-lg-0">
+                    <h3 class="h4 mb-3"><i class="fas fa-robot me-2"></i>BOTIFY</h3>
+                    <p>Your personal AI shopping assistant helping you find the best products tailored to your needs.</p>
+                </div>
+                <div class="col-lg-4 mb-4 mb-lg-0">
+                    <h3 class="h4 mb-3">Contact Us</h3>
+                    <p><i class="fas fa-university me-2"></i>Oxford Brookes University</p>
+                    <p><i class="fas fa-map-marker-alt me-2"></i>Headington Rd, Oxford OX3 0BP</p>
+                    <p><i class="fas fa-envelope me-2"></i>botify@gmail.com</p>
+                </div>
+                <div class="col-lg-4">
+                    <h3 class="h4 mb-3">Business Hours</h3>
+                    <p><strong>Monday - Saturday:</strong> 8:00 AM - 8:00 PM</p>
+                    <p><strong>Sunday:</strong> 12:00 PM - 8:00 PM</p>
+                    <div class="social-icons mt-4">
+                        <a href="#"><i class="fab fa-instagram"></i></a>
+                        <a href="#"><i class="fab fa-twitter"></i></a>
+                        <a href="#"><i class="fab fa-facebook-f"></i></a>
+                        <a href="#"><i class="fab fa-linkedin-in"></i></a>
+                    </div>
+                </div>
+            </div>
+            <hr class="my-4" style="border-color: rgba(255,255,255,0.2)">
+            <div class="row">
+                <div class="col-md-6 text-center text-md-start">
+                    <p class="mb-0">&copy; 2023 Botify. All rights reserved.</p>
+                </div>
+                <div class="col-md-6 text-center text-md-end">
+                    <a href="#" class="me-3">Privacy Policy</a>
+                    <a href="#">Terms of Service</a>
+                </div>
+            </div>
+        </div>
     </footer>
     
+    <!-- Back to Top Button -->
+    <a href="#" class="btn btn-sage btn-lg back-to-top rounded-circle">
+        <i class="fas fa-arrow-up"></i>
+    </a>
+    
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Back to top button
+        const backToTopButton = document.querySelector('.back-to-top');
+        
+        window.addEventListener('scroll', () => {
+            if (window.pageYOffset > 300) {
+                backToTopButton.classList.add('show');
+            } else {
+                backToTopButton.classList.remove('show');
+            }
+        });
+        
+        backToTopButton.addEventListener('click', (e) => {
+            e.preventDefault();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+        
+        // Smooth scrolling for navigation links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                
+                const targetId = this.getAttribute('href');
+                if (targetId === '#') return;
+                
+                const targetElement = document.querySelector(targetId);
+                if (targetElement) {
+                    window.scrollTo({
+                        top: targetElement.offsetTop - 80,
+                        behavior: 'smooth'
+                    });
+                }
+            });
+        });
+        
+        // Animation on scroll
+        function animateOnScroll() {
+            const elements = document.querySelectorAll('.animate__animated');
+            
+            elements.forEach(element => {
+                const elementPosition = element.getBoundingClientRect().top;
+                const screenPosition = window.innerHeight / 1.2;
+                
+                if (elementPosition < screenPosition) {
+                    const animationClass = element.classList.item(1);
+                    element.classList.add(animationClass);
+                }
+            });
+        }
+        
+        window.addEventListener('scroll', animateOnScroll);
+        window.addEventListener('load', animateOnScroll);
+    </script>
 </body>
 </html>

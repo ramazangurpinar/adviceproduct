@@ -97,11 +97,25 @@ def index():
 
 @app.route('/chat', methods=['POST'])
 def chat_route():
+    user_id = session.get('user_id', None)
     data = request.get_json()
     user_message = data.get('message')
 
     if user_message:
-        bot_response = chat(user_message)
+
+        bot_response, title = chat(user_message)
+
+        cur = mysql.connection.cursor()
+        # Insert conversation in DB
+        cur.execute("INSERT INTO conversations (user_id, title) VALUES (%s, %s)", (user_id, title))
+        # Get the conversation id
+        conversation_id = cur.lastrowid
+        # User
+        cur.execute("INSERT INTO messages (conversation_id, sender_type, content, sent_at) VALUES (%s, %s, %s, NOW())",(conversation_id, "user", user_message))
+        # Bot
+        cur.execute("INSERT INTO messages (conversation_id, sender_type, content, sent_at) VALUES (%s, %s, %s, NOW())",(conversation_id, "bot", bot_response))
+        
+        mysql.connection.commit()
         return jsonify({'response': bot_response})
 
     return jsonify({'error': 'No message received'}), 400
@@ -137,7 +151,6 @@ def register():
         user = cursor.fetchone()
         cursor.close()
 
-        # Session Creation
         session['user_id'] = user[0]
         session['username'] = username
         session['name'] = name

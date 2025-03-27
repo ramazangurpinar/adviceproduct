@@ -38,9 +38,10 @@ def chat(prompt):
         category_end = "' reply only with one word in english"
 
         category_final_prompt = category_prompt_init + prompt + category_end
-        print(deepseek_chain.invoke(category_final_prompt))
+        res2 = deepseek_chain.invoke(category_final_prompt)
+        res2 = remove_thinking_tags(res2)
 
-    return res1
+    return res1, res2
 
 
 def remove_thinking_tags(input_string):

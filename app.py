@@ -1,6 +1,6 @@
-from flask import Flask, render_template, redirect, url_for, session, request, jsonify
+from flask import Flask, flash, render_template, redirect, url_for, session, request, jsonify
 from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, SubmitField, IntegerField, SelectField
+from wtforms import StringField, PasswordField, SubmitField, IntegerField, SelectField, TextAreaField
 from wtforms.validators import DataRequired, Length, ValidationError, Optional
 import bcrypt
 from flask_mysqldb import MySQL
@@ -188,6 +188,12 @@ class ChangeUsernameForm(FlaskForm):
     new_username = StringField('New Username', validators=[DataRequired(), Length(min=4, max=50)])
     submit = SubmitField('Change Username')
 
+class ContactForm(FlaskForm):
+    name = StringField('Your Name', validators=[DataRequired(), Length(min=2, max=100)])
+    email = StringField('Your Email', validators=[DataRequired(), Length(min=4, max=100)])
+    message = TextAreaField('Message', validators=[DataRequired(), Length(min=10, max=1000)])
+    submit = SubmitField('Send')
+
 # Test database connection
 @app.route('/testdb')
 def testdb():
@@ -202,12 +208,40 @@ def testdb():
 @app.route('/')
 def index():
     if 'user_id' not in session:
-        return redirect(url_for('login'))
+        return render_template("firstpage.html")
     else:
         user_id = session.get('user_id', None)
         username = session.get('username', None)
         fullname = session.get("name", "Guest") + " "+session.get("surname", "")
     return render_template('index.html', user_id=user_id, username=username, fullname=fullname)
+
+@app.route('/contact', methods=['GET', 'POST'])
+def contact():
+    form = ContactForm()
+
+    if form.validate_on_submit():
+        name = form.name.data
+        email = form.email.data
+        message = form.message.data
+
+        variables = {
+            "name": name,
+            "email": email,
+            "message": message
+        }
+
+        success = send_email_from_template("CONTACT_FORM", "botifymanager@gmail.com", variables)
+
+        if success:
+            return redirect(url_for('contact_success'))
+        else:
+            flash("Your message could not be sent. Please try again later.", "danger")
+
+    return render_template('contact.html', form=form)
+
+@app.route('/contact-success')
+def contact_success():
+    return render_template('contact_success.html')
 
 @app.route('/chat', methods=['POST'])
 def chat_route():
@@ -665,7 +699,7 @@ def logout():
     session.pop('name', None) 
     session.pop('surname', None)
     session.pop('is_google_user', None)
-    return redirect(url_for('login'))
+    return render_template('firstpage.html')
 
 @app.route('/temp', methods=['GET', 'POST'])
 def temp():

@@ -1,0 +1,51 @@
+body {
+    background: linear-gradient(135deg, #e8ece9, #f9f9f9);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+}
+
+.contact-card {
+    background: white;
+    border: none;
+    border-radius: 2rem;
+    padding: 2rem 2.5rem;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+}
+
+.contact-header {
+    color: #556B5D;
+    font-weight: 700;
+}
+
+.form-control {
+    border-radius: 2rem;
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+}
+
+.form-control:focus {
+    box-shadow: 0 0 0 0.2rem rgba(107, 142, 127, 0.25);
+    border-color: #6B8E7F;
+}
+
+.btn-sage {
+    background-color: #6B8E7F;
+    border-color: #6B8E7F;
+    color: white;
+    transition: all 0.3s ease;
+}
+
+.btn-sage:hover {
+    background-color: #556B5D;
+    border-color: #556B5D;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+.alert-success {
+    border-radius: 2rem;
+}
+
+textarea.form-control {
+    min-height: 120px;
+    resize: vertical;
+}

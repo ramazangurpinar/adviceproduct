@@ -270,7 +270,6 @@ def start_new_conversation(user_id, title="Untitled"):
     cursor.close()
     print(f"New conversation started: {conversation_id}")
     session['conversation_id'] = conversation_id
-    session['user_keywords'] = []
     return conversation_id
 
 def update_conversation_keywords(conversation_id, keywords):
@@ -309,7 +308,6 @@ def end_conversation(conversation_id):
     mysql.connection.commit()
     cursor.close()
     session.pop('conversation_id', None)
-    session.pop('user_keywords', None)
 
 def save_message(conversation_id, sender_type, content):
     cursor = mysql.connection.cursor()
@@ -341,7 +339,6 @@ def ask_deepseek(user_message, user_context=None, conversation_history=[]):
             if user_context.get('keywords'):
                 system_prompt += f" The user seems interested in: {', '.join(user_context['keywords'])}."
 
-        # Dinamik olarak history kırp
         history = conversation_history.copy()
         history.append({"role": "user", "content": user_message})
 
@@ -389,7 +386,7 @@ def handle_user_message(data):
     update_conversation_keywords(conversation_id, new_keywords)
     update_last_activity(conversation_id)
 
-    user_context = get_user_context(user_id, conversation_id)  # ✅ artık doğru şekilde keywords içeriyor
+    user_context = get_user_context(user_id, conversation_id) 
     bot_reply, _ = ask_deepseek(user_text, user_context, conversation_history)
 
     save_message(conversation_id, 'bot', bot_reply)

@@ -6,38 +6,53 @@
 <body>
     <div class="container mt-5">
         <h2 class="text-center mb-4">Saved products</h2>
-        <div class="row">
-            <div class="col-md-4">
-                <div class="card">
-                    <img src="https://via.placeholder.com/150" class="card-img-top" alt="Product 1">
-                    <div class="card-body">
-                        <h5 class="card-title">Product 1</h5>
-                        <p class="card-text">Description of Product 1.</p>
-                        <a href="#" class="btn btn-primary">View Details</a>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="card">
-                    <img src="https://via.placeholder.com/150" class="card-img-top" alt="Product 2">
-                    <div class="card-body">
-                        <h5 class="card-title">Product 2</h5>
-                        <p class="card-text">Description of Product 2.</p>
-                        <a href="#" class="btn btn-primary">View Details</a>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="card">
-                    <img src="https://via.placeholder.com/150" class="card-img-top" alt="Product 3">
-                    <div class="card-body">
-                        <h5 class="card-title">Product 3</h5>
-                        <p class="card-text">Description of Product 3.</p>
-                        <a href="#" class="btn btn-primary">View Details</a>
-                    </div>
-                </div>
-            </div>
+        <div class="row" id="product-list">
+            <!-- Products will be dynamically inserted here -->
         </div>
     </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            // Function to fetch products based on a query
+            function fetchProducts(query) {
+                // Simulating a database query result
+                const allProducts = [
+                    { id: 1, name: "Laptop Dell", description: "High-performance Dell laptop."},
+                    { id: 2, name: "iPhone 14", description: "Latest Apple iPhone with advanced features."},
+                    { id: 3, name: "Samsung Galaxy S23", description: "Powerful Samsung smartphone."}
+                ];
+                
+                // Filtering products based on query
+                return allProducts.filter(product => product.name.toLowerCase().includes(query.toLowerCase()));
+            }
+
+            // Example query (this can be dynamically set based on user input)
+            const query = "iPhone"; // Modify this query dynamically as needed
+            const products = fetchProducts(query);
+            
+            const productList = document.getElementById("product-list");
+            productList.innerHTML = ""; // Clear existing content
+
+            products.forEach(product => {
+                const googleSearchUrl = `https://www.google.com/search?q=${encodeURIComponent(product.name)}`;
+                const productHTML = `
+                    <div class="col-md-12">
+                        <div class="card mb-3">
+                            <div class="row g-0">
+                                <div class="col-md-8">
+                                    <div class="card-body">
+                                        <h5 class="card-title">${product.name}</h5>
+                                        <p class="card-text">${product.description}</p>
+                                        <a href="${googleSearchUrl}" target="_blank" class="btn btn-primary">Search on Google</a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                productList.innerHTML += productHTML;
+            });
+        });
+    </script>
 </body>
 {% endblock %}

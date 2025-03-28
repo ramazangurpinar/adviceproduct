@@ -230,7 +230,7 @@ def contact():
             "message": message
         }
 
-        success = send_email_from_template("CONTACT_FORM", "botifymanager@gmail.com", variables)
+        success = send_email_from_template("CONTACT_FORM", email, variables)
 
         if success:
             return redirect(url_for('contact_success'))
@@ -699,6 +699,10 @@ def logout():
     session.pop('name', None) 
     session.pop('surname', None)
     session.pop('is_google_user', None)
+    return render_template('firstpage.html')
+
+@app.route('/firstpage')
+def firstpage():
     return render_template('firstpage.html')
 
 @app.route('/temp', methods=['GET', 'POST'])

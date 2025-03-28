@@ -6,8 +6,6 @@ import bcrypt
 from flask_mysqldb import MySQL
 import os
 from dotenv import load_dotenv
-from datetime import timedelta
-import json
 import smtplib
 from email.mime.text import MIMEText
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
@@ -16,12 +14,20 @@ from deepseek_chat_api import chat
 from log_types import LogType
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
-
+from flask_socketio import SocketIO, emit
+from langchain_groq import ChatGroq
+from langchain_core.messages import HumanMessage, SystemMessage
+import re
+from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
+from datetime import datetime, timedelta, timezone
+import tiktoken
 
 app = Flask(__name__)
+socketio = SocketIO(app, cors_allowed_origins="*")
 load_dotenv()
 
 # Google OAuth Configuration
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 app.secret_key = os.getenv('SECRET_KEY', 'fallback-secret-key')
 app.config['MYSQL_HOST'] = 'localhost'  # host address of the database
@@ -31,6 +37,18 @@ app.config['MYSQL_DB'] = 'productadvice'  # database name
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)  # session timeout
 
 mysql = MySQL(app)
+
+deepseek_chat = ChatGroq(
+    api_key=DEEPSEEK_API_KEY,
+    model_name="deepseek-r1-distill-llama-70b"  # or "deepseek-r1-distill-llama-70b" if available
+)
+
+def count_tokens(text):
+    try:
+        encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")  # veya en yakın olanı
+    except KeyError:
+        encoding = tiktoken.get_encoding("cl100k_base")  # fallback
+    return len(encoding.encode(text))
 
 def load_countries_from_db():
     cursor = mysql.connection.cursor()
@@ -215,6 +233,211 @@ def index():
         fullname = session.get("name", "Guest") + " "+session.get("surname", "")
     return render_template('index.html', user_id=user_id, username=username, fullname=fullname)
 
+def get_user_context(user_id, keywords=None):
+    cursor = mysql.connection.cursor()
+    cursor.execute("SELECT age, gender, country FROM users WHERE id = %s", (user_id,))
+    result = cursor.fetchone()
+    cursor.close()
+    if result:
+        context = {
+            "age": result[0],
+            "gender": result[1],
+            "country": get_country_name(result[2])
+        }
+        if keywords:
+            context["keywords"] = keywords
+        return context
+    return {}
+
+def extract_keywords(text):
+    words = re.findall(r'\b\w+\b', text.lower())
+    keywords = [word.capitalize() for word in words if word not in ENGLISH_STOP_WORDS and len(word) > 2]
+    return list(set(keywords))
+
+def start_new_conversation(user_id, title="Untitled"):
+    cursor = mysql.connection.cursor()
+    cursor.execute("""
+        INSERT INTO conversations (user_id, title, created_at, keywords, is_active, last_activity_at)
+        VALUES (%s, %s, NOW(), '', TRUE, NOW())
+    """, (user_id, title))
+    mysql.connection.commit()
+    conversation_id = cursor.lastrowid
+    cursor.close()
+    print(f"New conversation started: {conversation_id}")
+    session['conversation_id'] = conversation_id
+    session['user_keywords'] = []
+    session['conversation_history'] = []
+    return conversation_id
+
+def update_conversation_keywords(conversation_id, keywords):
+    keyword_text = ", ".join(keywords)
+    cursor = mysql.connection.cursor()
+    cursor.execute("""
+        UPDATE conversations SET keywords = %s WHERE conversation_id = %s
+    """, (keyword_text, conversation_id))
+    mysql.connection.commit()
+    cursor.close()
+
+def update_last_activity(conversation_id):
+    cursor = mysql.connection.cursor()
+    cursor.execute("""
+        UPDATE conversations SET last_activity_at = NOW() WHERE conversation_id = %s
+    """, (conversation_id,))
+    mysql.connection.commit()
+    cursor.close()
+
+def is_conversation_expired(conversation_id, minutes= 30):
+    cursor = mysql.connection.cursor()
+    cursor.execute("SELECT last_activity_at FROM conversations WHERE conversation_id = %s", (conversation_id,))
+    result = cursor.fetchone()
+    cursor.close()
+    if result and result[0]:
+        last_active = result[0]
+        if datetime.now(timezone.utc) - last_active.replace(tzinfo=timezone.utc) > timedelta(minutes=minutes):
+            return True
+    return False
+
+def end_conversation(conversation_id):
+    cursor = mysql.connection.cursor()
+    cursor.execute("""
+        UPDATE conversations SET is_active = 0 WHERE conversation_id = %s
+    """, (conversation_id,))
+    mysql.connection.commit()
+    cursor.close()
+    session.pop('conversation_id', None)
+    session.pop('conversation_history', None)
+    session.pop('user_keywords', None)
+
+def save_message(conversation_id, sender_type, content):
+    cursor = mysql.connection.cursor()
+    cursor.execute("""
+        INSERT INTO messages (conversation_id, sender_type, content, sent_at)
+        VALUES (%s, %s, %s, NOW())
+    """, (conversation_id, sender_type, content))
+    mysql.connection.commit()
+    cursor.close()
+
+MAX_TOKENS = 6000
+
+def ask_deepseek(user_message, user_context=None, conversation_history=[]):
+    try:
+        system_prompt = (
+            "You are a helpful and concise product recommendation assistant. "
+            "Respond in a short and clear format, avoiding long paragraphs. "
+            "If you are listing products, keep it to 2–3 sentences per product. "
+            "Provide a maximum of 3 product recommendations based on the user's preferences."
+        )
+
+        if user_context:
+            if user_context.get('age'):
+                system_prompt += f" The user is {user_context['age']} years old."
+            if user_context.get('gender'):
+                system_prompt += f" They are {user_context['gender']}."
+            if user_context.get('country'):
+                system_prompt += f" They are from {user_context['country']}."
+            if user_context.get('keywords'):
+                system_prompt += f" The user seems interested in: {', '.join(user_context['keywords'])}."
+
+        # Dinamik olarak history kırp
+        history = conversation_history.copy()
+        history.append({"role": "user", "content": user_message})
+
+        total_token_estimate = count_tokens(system_prompt + user_message + ''.join(msg["content"] for msg in history))
+        while total_token_estimate > MAX_TOKENS and len(history) > 1:
+            history.pop(0)
+            total_token_estimate = count_tokens(system_prompt + user_message + ''.join(msg["content"] for msg in history))
+
+        response = deepseek_chat([
+            SystemMessage(content=system_prompt),
+            *[HumanMessage(content=msg["content"]) for msg in history]
+        ])
+
+        bot_reply = response.content
+        MAX_REPLY_LENGTH = 1000
+        if len(bot_reply) > MAX_REPLY_LENGTH:
+            bot_reply = bot_reply[:MAX_REPLY_LENGTH].rsplit(" ", 1)[0] + "..."
+
+        history.append({"role": "assistant", "content": bot_reply})
+        return bot_reply, history
+    except Exception as e:
+        print("DeepSeek error:", str(e))
+        return "Sorry, I couldn't generate a response.", conversation_history
+
+# --- SocketIO kullanici mesaj eventi ---
+@socketio.on("user_message")
+def handle_user_message(data):
+    user_text = data.get("content", "")
+    user_id = session.get("user_id")
+    user_context = get_user_context(user_id)
+    print("socketio.on user_message")
+    print(user_text)
+    print(session.get("conversation_id"))
+    # Zaman aşımı kontrolü
+    if 'conversation_id' in session:
+        if is_conversation_expired(session['conversation_id'], minutes=2):
+            end_conversation(session['conversation_id'])
+            start_new_conversation(user_id, title="New Chat After Timeout")
+            emit("info_message", {"content": "Sohbetiniz zaman aşımına uğradı. Yeni bir konuşma başlatıldı."})
+    if 'conversation_id' not in session:
+        start_new_conversation(user_id, title="Chat Session")
+
+    conversation_history = session.get('conversation_history', []).copy()
+    save_message(session['conversation_id'], 'user', user_text)
+    # Anahtar kelimeleri çıkar ve güncelle
+    new_keywords = extract_keywords(user_text)
+    session['user_keywords'] = list(set(session.get('user_keywords', []) + new_keywords))
+    update_conversation_keywords(session['conversation_id'], session['user_keywords'])
+    update_last_activity(session['conversation_id'])
+    # Context'i gönder
+    user_context["keywords"] = session['user_keywords']
+    print(session['user_keywords'])
+    bot_reply, updated_history = ask_deepseek(user_text, user_context, conversation_history)
+    save_message(session['conversation_id'], 'bot', bot_reply)
+    session['conversation_history'] = updated_history
+    emit("bot_reply", {"content": bot_reply})
+
+@app.route('/chat')
+def chat():
+    return render_template('chat.html')
+
+def update_conversation_status(conversation_id, status):
+    # Assuming you have a Conversation model or direct SQL query to update the status
+    connection = get_db_connection()  # Your database connection method
+    cursor = connection.cursor()
+
+    # SQL query to update the status of the conversation
+    query = "UPDATE conversations SET status = %s WHERE id = %s"
+    cursor.execute(query, (status, conversation_id))
+
+    connection.commit()
+    cursor.close()
+    connection.close()
+
+@app.route('/end_chat', methods=['POST'])
+def end_chat():
+    # Fetch the conversation ID from the session
+    
+    conversation_id = session['conversation_id']
+    print(f"Ending conversation: {conversation_id}")
+    if not conversation_id:
+        return redirect(url_for('chat'))  # Redirect back if no conversation exists
+
+    # Mark the conversation as inactive (status = 0)
+    try:
+
+        # Assuming you have a method like this to mark the conversation as inactive
+        update_conversation_status(conversation_id, 0)
+
+        # Optionally, you can log that the conversation has ended
+        save_message(conversation_id, 'system', 'Conversation ended.')
+
+        # Return a simple message or redirect
+        return redirect(url_for('index'))  # Redirect back to chat page after ending the conversation
+    except Exception as e:
+        # Handle any errors that might occur during status update
+        print(f"Error ending conversation: {e}")
+        return redirect(url_for('404'))  # Redirect to a 404 page or an error page
+
 @app.route('/contact', methods=['GET', 'POST'])
 def contact():
     form = ContactForm()
@@ -243,32 +466,6 @@ def contact():
 def contact_success():
     return render_template('contact_success.html')
 
-@app.route('/chat', methods=['POST'])
-def chat_route():
-    user_id = session.get('user_id', None)
-    data = request.get_json()
-    user_message = data.get('message')
-
-    if user_message:
-
-        bot_response, title = chat(user_message)
-        cur = mysql.connection.cursor()
-
-        # Insert conversation in DB
-        cur.execute("INSERT INTO conversations (user_id, title) VALUES (%s, %s)", (user_id, title))
-        # Get the conversation id
-        conversation_id = cur.lastrowid
-        # User
-        cur.execute("INSERT INTO messages (conversation_id, sender_type, content, sent_at) VALUES (%s, %s, %s, NOW())",(conversation_id, "user", user_message))
-        
-        # Bot
-        for i in bot_response:
-            cur.execute("INSERT INTO messages (conversation_id, sender_type, content, sent_at) VALUES (%s, %s, %s, NOW())",(conversation_id, "bot", i))
-        
-        mysql.connection.commit()
-        return jsonify({'response': bot_response})
-
-    return jsonify({'error': 'No message received'}), 400
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():

@@ -70,13 +70,12 @@ def get_country_name(country_code):
 s = URLSafeTimedSerializer(app.secret_key)
 
 def get_db_connection():
-    """Ensure the MySQL connection is active before using it."""
-    if mysql.connection.open:
-        return mysql.connection
-    else:
-        mysql.connection.ping(reconnect=True)
-        return mysql.connection
-
+    conn = mysql.connection
+    try:
+        conn.ping(reconnect=True)
+    except Exception:
+        conn = mysql.connect
+    return conn
 
 def log_action(log_type: LogType, message, user_id=None):
     cursor = mysql.connection.cursor()
@@ -233,21 +232,27 @@ def index():
         fullname = session.get("name", "Guest") + " "+session.get("surname", "")
     return render_template('index.html', user_id=user_id, username=username, fullname=fullname)
 
-def get_user_context(user_id, keywords=None):
+def get_user_context(user_id, conversation_id=None):
     cursor = mysql.connection.cursor()
     cursor.execute("SELECT age, gender, country FROM users WHERE id = %s", (user_id,))
     result = cursor.fetchone()
-    cursor.close()
+
+    context = {}
     if result:
         context = {
             "age": result[0],
             "gender": result[1],
             "country": get_country_name(result[2])
         }
-        if keywords:
-            context["keywords"] = keywords
-        return context
-    return {}
+
+    if conversation_id:
+        cursor.execute("SELECT keywords FROM conversations WHERE conversation_id = %s", (conversation_id,))
+        keyword_result = cursor.fetchone()
+        if keyword_result and keyword_result[0]:
+            context["keywords"] = [word.strip() for word in keyword_result[0].split(",")]
+
+    cursor.close()
+    return context
 
 def extract_keywords(text):
     words = re.findall(r'\b\w+\b', text.lower())
@@ -266,7 +271,6 @@ def start_new_conversation(user_id, title="Untitled"):
     print(f"New conversation started: {conversation_id}")
     session['conversation_id'] = conversation_id
     session['user_keywords'] = []
-    session['conversation_history'] = []
     return conversation_id
 
 def update_conversation_keywords(conversation_id, keywords):
@@ -305,7 +309,6 @@ def end_conversation(conversation_id):
     mysql.connection.commit()
     cursor.close()
     session.pop('conversation_id', None)
-    session.pop('conversation_history', None)
     session.pop('user_keywords', None)
 
 def save_message(conversation_id, sender_type, content):
@@ -363,42 +366,59 @@ def ask_deepseek(user_message, user_context=None, conversation_history=[]):
         print("DeepSeek error:", str(e))
         return "Sorry, I couldn't generate a response.", conversation_history
 
-# --- SocketIO kullanici mesaj eventi ---
 @socketio.on("user_message")
 def handle_user_message(data):
     user_text = data.get("content", "")
     user_id = session.get("user_id")
-    user_context = get_user_context(user_id)
-    print("socketio.on user_message")
-    print(user_text)
-    print(session.get("conversation_id"))
-    # Zaman aşımı kontrolü
+
     if 'conversation_id' in session:
         if is_conversation_expired(session['conversation_id'], minutes=2):
             end_conversation(session['conversation_id'])
             start_new_conversation(user_id, title="New Chat After Timeout")
             emit("info_message", {"content": "Sohbetiniz zaman aşımına uğradı. Yeni bir konuşma başlatıldı."})
+
     if 'conversation_id' not in session:
         start_new_conversation(user_id, title="Chat Session")
 
-    conversation_history = session.get('conversation_history', []).copy()
-    save_message(session['conversation_id'], 'user', user_text)
-    # Anahtar kelimeleri çıkar ve güncelle
+    conversation_id = session['conversation_id']
+    conversation_history = get_conversation_history(conversation_id)
+
+    save_message(conversation_id, 'user', user_text)
+
     new_keywords = extract_keywords(user_text)
-    session['user_keywords'] = list(set(session.get('user_keywords', []) + new_keywords))
-    update_conversation_keywords(session['conversation_id'], session['user_keywords'])
-    update_last_activity(session['conversation_id'])
-    # Context'i gönder
-    user_context["keywords"] = session['user_keywords']
-    print(session['user_keywords'])
-    bot_reply, updated_history = ask_deepseek(user_text, user_context, conversation_history)
-    save_message(session['conversation_id'], 'bot', bot_reply)
-    session['conversation_history'] = updated_history
+    update_conversation_keywords(conversation_id, new_keywords)
+    update_last_activity(conversation_id)
+
+    user_context = get_user_context(user_id, conversation_id)  # ✅ artık doğru şekilde keywords içeriyor
+    bot_reply, _ = ask_deepseek(user_text, user_context, conversation_history)
+
+    save_message(conversation_id, 'bot', bot_reply)
+
     emit("bot_reply", {"content": bot_reply})
 
+
 @app.route('/chat')
-def chat():
+def chat_page():
     return render_template('chat.html')
+
+def get_conversation_history(conversation_id):
+    cursor = mysql.connection.cursor()
+    cursor.execute("""
+        SELECT sender_type, content
+        FROM messages
+        WHERE conversation_id = %s
+        ORDER BY sent_at
+    """, (conversation_id,))
+    raw_history = cursor.fetchall()
+    cursor.close()
+
+    history = []
+    for sender_type, content in raw_history:
+        if sender_type == "user":
+            history.append({"role": "user", "content": content})
+        elif sender_type == "bot":
+            history.append({"role": "assistant", "content": content})
+    return history
 
 def update_conversation_status(conversation_id, status):
     # Assuming you have a Conversation model or direct SQL query to update the status
@@ -406,7 +426,7 @@ def update_conversation_status(conversation_id, status):
     cursor = connection.cursor()
 
     # SQL query to update the status of the conversation
-    query = "UPDATE conversations SET status = %s WHERE id = %s"
+    query = "UPDATE conversations SET is_active = %s WHERE conversation_id = %s"
     cursor.execute(query, (status, conversation_id))
 
     connection.commit()
@@ -417,7 +437,7 @@ def update_conversation_status(conversation_id, status):
 def end_chat():
     # Fetch the conversation ID from the session
     
-    conversation_id = session['conversation_id']
+    conversation_id = session.get('conversation_id')
     print(f"Ending conversation: {conversation_id}")
     if not conversation_id:
         return redirect(url_for('chat'))  # Redirect back if no conversation exists

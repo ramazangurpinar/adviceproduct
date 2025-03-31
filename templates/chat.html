@@ -152,15 +152,15 @@
   </div>
 
   <script>
+    // Clear localStorage on page load and before unload
     window.addEventListener("DOMContentLoaded", () => {
-      const conversationId = localStorage.getItem("conversation_id");
-      if (conversationId) {
-        console.log("Existing conversation_id found in localStorage:", conversationId);
-      }
-      else {
-        console.log("No conversation_id found in localStorage. A new session will be created.");
-      }
+      localStorage.clear();
     });   
+
+    // Clear localStorage on page unload (e.g., refresh or close)
+    window.addEventListener("beforeunload", function () {
+      localStorage.clear();
+    });    
 
     const socket = io();
     const chatBox = document.getElementById('chat-box');
@@ -187,9 +187,56 @@
     });
 
     socket.on('bot_reply', function (data) {
-      chatBox.innerHTML += `<div class="message bot"><strong>Bot:</strong> ${data.content}</div>`;
+      const reply = data.content;
+
+      if (Array.isArray(reply)) {
+        reply.forEach(item => {
+          const messageElement = createBotMessage(item);
+          chatBox.appendChild(messageElement);
+        });
+      } else {
+        const messageElement = createPlainBotMessage(reply);
+        chatBox.appendChild(messageElement);  
+      }
+
       scrollToBottom();
     });
+
+    function createBotMessage(item) {
+        const div = document.createElement('div');
+        div.classList.add('message', 'bot');
+
+        const botLabel = document.createElement('strong');
+        botLabel.textContent = 'Bot:';
+
+        const productName = document.createElement('b');
+        productName.textContent = item.name;
+
+        const productDescription = document.createElement('div');
+        productDescription.textContent = item.description;
+        div.appendChild(botLabel);
+        div.appendChild(document.createElement('br'));
+        div.appendChild(productName);
+        div.appendChild(document.createElement('br'));
+        div.appendChild(productDescription);
+
+        return div;
+    }
+
+    function createPlainBotMessage(text) {
+      const div = document.createElement('div');
+      div.classList.add('message', 'bot');
+
+      const botLabel = document.createElement('strong');
+      botLabel.textContent = 'Bot:';
+
+      const message = document.createTextNode(` ${text}`);
+
+      div.appendChild(botLabel);
+      div.appendChild(message);
+
+      return div;
+    }
 
     socket.on('info_message', function (data) {
       if (data.content.includes("has expired")) {
@@ -269,8 +316,6 @@
     } else {
       console.error("❌ endChatForm not found!");
     }
-
-
 
     function updateLocalStorage(key, value) {
       localStorage.setItem(key, value);

@@ -16,7 +16,7 @@ from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 from flask_socketio import SocketIO, emit
 from langchain_groq import ChatGroq
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 import re
 from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
 from datetime import datetime, timedelta, timezone
@@ -358,7 +358,9 @@ def end_conversation(conversation_id):
     print(f"Session conversation_id: {session.get('conversation_id')}")
 
 def save_message(conversation_id, sender_type, content):
-    print(f"Saving message for conversation_id: {conversation_id}, sender_type: {sender_type}, content: {content}")
+    if isinstance(content, (list, tuple)):
+        content = " ".join(map(str, content))  # Her elemanı string yap ve birleştir
+    print(f"type(content): {type(content)}")
     cursor = mysql.connection.cursor()
     cursor.execute("""
         INSERT INTO messages (conversation_id, sender_type, content, sent_at)
@@ -369,66 +371,92 @@ def save_message(conversation_id, sender_type, content):
 
 MAX_TOKENS = 6000
 
-def ask_deepseek(user_message, user_context=None, conversation_history=[]):
-    print(f"ask deepseek function called")
-    print(f"User message: {user_message}")
+def remove_thinking_tags(input_string):
+    import re
+    cleaned_string = re.sub(r'<think>.*?</think>', '', input_string, flags=re.DOTALL)
+    return cleaned_string
+
+def separate_numbered_suggestions(text):
+    pattern = r"<PRODUCT>\s*-\s*(.*?)\s*-\s*(.*?)($|\n)"
+    matches = re.findall(pattern, text)
+    return [{"name": name.strip(), "description": desc.strip()} for name, desc, _ in matches]
+
+def ask_deepseek(user_message, user_context=None, conversation_history=None):
+    if conversation_history is None:
+        conversation_history = []
+
+    print(f"🧠🧠🧠 ask_deepseek called | message: {user_message}")
     print(f"User context: {user_context}")
-    print(f"Conversation history: {conversation_history}")
-    print(f"Session variables: {session}")
-    print(f"Session conversation_id: {session.get('conversation_id')}")
+    print(f"Conversation history length: {len(conversation_history)}")
+    print(f"Session: {session}")
 
     try:
-        system_prompt = (
-            "You are a helpful product assistant.\n"
-            "Reply ONLY with 3 numbered product suggestions.\n"
-            "Each item: 1 sentence, max 20 words.\n"
-            "No introductions, no explanations, no markdown.\n"
-            "Format:\n"
-            "1. [Product Name] – [Key feature].\n"
-            "Focus on user needs and preferences."
-        )
+        # 🧾 Base instruction prompt
+        system_prompt = """
+        You are an AI assistant designed to help users choose products.
 
+        STRICT INSTRUCTIONS — FOLLOW CAREFULLY:
+        1. If the user asks about buying a product, give a **brief overview (max 200 words)** of what key metrics or criteria to consider for that product type.
+        2. If the user requests recommendations, return **ONLY up to 3 products**, each with:
+            - A name
+            - A short description (max 100 words)
+            - Use the following format for each product:
+              <PRODUCT> - [Product Name] - [Short Description]
+        3. If the prompt is NOT about a product or recommendation, reply **exactly** with:
+            "I am sorry but this box is only for the suggestion of products, please insert a new prompt."
+        4. NEVER include more than 3 products. NEVER respond outside the specified format.
+        Use EXACTLY the following format for each product (no numbering allowed!):
+        <PRODUCT> - [Product Name] - [Short Description]
+        ❗Do NOT use any numbering like "1.", "2.", etc. Only use <PRODUCT> tags.
+        """
+        print(f"System prompt: {system_prompt}")
+        # 🎯 Add context if available
         if user_context:
-            if user_context.get('age'):
+            if user_context.get("age"):
                 system_prompt += f" The user is {user_context['age']} years old."
-            if user_context.get('gender'):
+            if user_context.get("gender"):
                 system_prompt += f" They are {user_context['gender']}."
-            if user_context.get('country'):
+            if user_context.get("country"):
                 system_prompt += f" They are from {user_context['country']}."
-            if user_context.get('keywords'):
-                system_prompt += f" The user's key concerns are: {', '.join(user_context['keywords'])}. Match the recommendations accordingly."
+            if user_context.get("keywords"):
+                system_prompt += f" The user's key concerns are: {', '.join(user_context['keywords'])}."
 
-        history = conversation_history.copy()
-        history.append({"role": "user", "content": user_message})
+        # 🧱 Build LangChain message list
+        messages = [SystemMessage(content=system_prompt)]
+        print (f"System prompt: {system_prompt}")
+        print (f"Messages: {messages}")
+        for msg in conversation_history:
+            if msg["role"] == "user":
+                messages.append(HumanMessage(content=msg["content"]))
+            elif msg["role"] == "bot":
+                messages.append(AIMessage(content=msg["content"]))
 
-        total_token_estimate = count_tokens(system_prompt + user_message + ''.join(msg["content"] for msg in history))
-        while total_token_estimate > MAX_TOKENS and len(history) > 1:
-            history.pop(0)
-            total_token_estimate = count_tokens(system_prompt + user_message + ''.join(msg["content"] for msg in history))
+        # ➕ Add new user message
+        messages.append(HumanMessage(content=user_message))
+        print(f"Messages: {messages}")
 
-        response = deepseek_chat([
-            SystemMessage(content=system_prompt),
-            *[HumanMessage(content=msg["content"]) for msg in history]
-        ])
-
-        bot_reply = response.content
-
-        MAX_REPLY_LENGTH = 1000
-        if len(bot_reply) > MAX_REPLY_LENGTH:
-            bot_reply = bot_reply[:MAX_REPLY_LENGTH].rsplit(" ", 1)[0] + "..."
-
-        history.append({"role": "assistant", "content": bot_reply})
-        return bot_reply, history
+        # 🔗 Call the model
+        response = deepseek_chat(messages)
+        print(f"Response: {response.content}")
+        bot_reply = remove_thinking_tags(response.content)
+        print(f"Bot reply: {bot_reply}")
+        # 🧹 Clean response
+        structured = separate_numbered_suggestions(bot_reply)
+        print(f"Structured response: {structured}")
+        # 🧾 Update history for next turn
+        conversation_history.append({"role": "user", "content": user_message})
+        conversation_history.append({"role": "bot", "content": bot_reply})
+        print (f"Conversation history updated: {conversation_history}")
+        return bot_reply, structured
 
     except Exception as e:
-        print("DeepSeek error:", str(e))
+        print(f"❌ DeepSeek error: {str(e)}")
         return "Sorry, I couldn't generate a response.", conversation_history
-
 
 @socketio.on("session_check")
 def handle_session_check():
-    print("✅ WebSocket bağlantısı kuruldu.")
-    print("📦 Session içeriği:")
+    print("✅ WebSocket connection built.")
+    print("📦 Session:")
     for key, value in session.items():
         print(f"  {key}: {value}")
 
@@ -497,13 +525,17 @@ def handle_user_message(data):
 
     # 🤖 Get AI assistant's response based on conversation history and user context
     conversation_history = get_conversation_history(conversation_id)
-    bot_reply, _ = ask_deepseek(user_text, user_context, conversation_history)
+    bot_reply, structured = ask_deepseek(user_text, user_context, conversation_history)
 
     # 💾 Save bot's reply to the database
     save_message(conversation_id, 'bot', bot_reply)
 
     # 🚀 Send bot's reply to frontend in real-time
-    emit("bot_reply", {"content": bot_reply})
+    if structured:
+        emit("bot_reply", {"content": structured})
+    else:
+        emit("bot_reply", {"content": bot_reply})
+
 
 @app.route('/chat',endpoint='smartbot_chat')
 def chat_page():
@@ -525,7 +557,7 @@ def get_conversation_history(conversation_id):
         if sender_type == "user":
             history.append({"role": "user", "content": content})
         elif sender_type == "bot":
-            history.append({"role": "assistant", "content": content})
+            history.append({"role": "bot", "content": content})
     return history
 
 def update_conversation_status(conversation_id, status):

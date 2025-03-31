@@ -14,9 +14,9 @@
         <a class="navbar-brand" href="{{ url_for('index') }}">
           <img src="{{ url_for('static', filename='image/home.png') }}" alt="Home" width="30" height="30">
         </a>
-        <a class="btn btn-primary" href="{{ url_for('chat') }}">
-          💬 Chat
-        </a>
+        <a href="{{ url_for('smartbot_chat') }}">
+          <img src="{{ url_for('static', filename='image/chat.png') }}" alt="Chat" width="24" height="24">
+        </a>        
         <div class="ms-auto d-flex align-items-center gap-3">
           <a href="{{ url_for('favourites') }}">
             <img src="{{ url_for('static', filename='image/heart.png') }}" alt="Favourites" width="24" height="24">

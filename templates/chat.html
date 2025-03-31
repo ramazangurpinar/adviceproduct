@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>SmartBot Chat</title>
+  <link rel="icon" href="{{ url_for('static', filename='image/favicon.ico') }}" type="image/x-icon">
   <script src="https://cdn.socket.io/4.3.2/socket.io.min.js"></script>
   <style>
     * {
@@ -132,7 +133,9 @@
 <body>
   <div class="chat-wrapper">
     <div class="chat-header">
-      <img src="{{ url_for('static', filename='image/botifylogo.png') }}" alt="Botify Logo" width="100">
+      <a href="{{ url_for('index') }}" style="width:75px; height:75px; display:inline-block;">
+        <img src="{{ url_for('static', filename='image/botifylogo.png') }}" alt="Botify Logo" width="75" height="75">
+      </a>
       💬 Chat with Botify
     </div>
 
@@ -141,15 +144,28 @@
     <div class="chat-input-area">
       <input type="text" id="messageInput" placeholder="Type your message..." />
       <button class="send-btn" onclick="sendMessage()">Send</button>
-      <form action="/end_chat" method="post" style="margin: 0;">
+      <form id="endChatForm" action="/end_chat" method="post" style="margin: 0;">
+        <input type="hidden" id="conversation_id_input" name="conversation_id" />
         <button type="submit" class="end-btn">End Chat</button>
-      </form>
+      </form>      
     </div>
   </div>
 
   <script>
+    window.addEventListener("DOMContentLoaded", () => {
+      const conversationId = localStorage.getItem("conversation_id");
+      if (conversationId) {
+        console.log("Existing conversation_id found in localStorage:", conversationId);
+      }
+      else {
+        console.log("No conversation_id found in localStorage. A new session will be created.");
+      }
+    });   
+
     const socket = io();
     const chatBox = document.getElementById('chat-box');
+    const messageInput = document.getElementById('messageInput');
+    const endChatForm = document.getElementById("endChatForm");
 
     function scrollToBottom() {
       chatBox.scrollTop = chatBox.scrollHeight;
@@ -157,6 +173,17 @@
 
     socket.on('connect', () => {
       console.log('Connected to server');
+      socket.emit("session_check");
+
+      // Force sync from localStorage to session on reload
+      const storedConvId = localStorage.getItem("conversation_id");
+      if (storedConvId) {
+        socket.emit("localstorage_sync", {
+          key: "conversation_id",
+          value: storedConvId,
+          action: "set"
+        });
+      }
     });
 
     socket.on('bot_reply', function (data) {
@@ -165,20 +192,97 @@
     });
 
     socket.on('info_message', function (data) {
+      if (data.content.includes("has expired")) {
+        localStorage.removeItem("conversation_id");
+        console.log("Session expired → conversation_id is deleted from localStorage.");
+      }
       chatBox.innerHTML += `<div class="message info"><em>${data.content}</em></div>`;
       scrollToBottom();
     });
 
+    socket.on("conversation_initialized", function(data) {
+      if (data.conversation_id) {
+        updateLocalStorage("conversation_id", data.conversation_id);
+      }
+    });    
+
     function sendMessage() {
-      const input = document.getElementById('messageInput');
-      const content = input.value.trim();
+      const content = messageInput.value.trim();
       if (content === '') return;
 
       socket.emit('user_message', { content: content });
 
       chatBox.innerHTML += `<div class="message user"><strong>You:</strong> ${content}</div>`;
-      input.value = '';
+      messageInput.value = '';
       scrollToBottom();
+    }
+
+    (function setupEnterHandler() {
+      let enterPressed = false;
+
+      messageInput.addEventListener("keydown", function (event) {
+        if (event.key === "Enter") {
+          if (!event.shiftKey) {
+            event.preventDefault();
+            enterPressed = true;
+          }
+        }
+      });
+
+      messageInput.addEventListener("keyup", function (event) {
+        if (event.key === "Enter" && enterPressed) {
+          enterPressed = false;
+          sendMessage();
+        }
+      });
+    })();
+
+    if (endChatForm) {
+      endChatForm.addEventListener("submit", (e) => {
+        const convId = localStorage.getItem("conversation_id");
+
+        if (convId) {
+          e.preventDefault(); // ❗ Formun varsayılan gönderimini geçici olarak engelle
+
+          const inputField = document.getElementById("conversation_id_input");
+          if (inputField) {
+            inputField.value = convId;
+            console.log(`📤 Hidden input updated with conversation_id: ${convId}`);
+          } else {
+            console.warn("⚠️ Hidden input (conversation_id_input) not found.");
+          }
+
+          // localStorage'dan silmeden önce socket'e bildir
+          socket.emit("localstorage_sync", {
+            key: "conversation_id",
+            value: convId,
+            action: "remove"
+          });
+
+          localStorage.removeItem("conversation_id");
+          console.log(`🧹 conversation_id removed from localStorage (value was: ${convId})`);
+
+          // ✅ Formu manuel olarak gönder
+          endChatForm.submit();
+        }
+      });
+    } else {
+      console.error("❌ endChatForm not found!");
+    }
+
+
+
+    function updateLocalStorage(key, value) {
+      localStorage.setItem(key, value);
+      socket.emit("localstorage_sync", { key: key, value: value, action: "set" });
+      console.log(`📥 localStorage key updated "${key}" updated → value: ${value}`);
+    }
+
+    function removeLocalStorage(key) {
+      const value = localStorage.getItem(key); // 🔹 Get the value before removing
+      console.log(`🗑️ localStorage key "${key}" removed with value: ${value}`);
+      socket.emit("localstorage_sync", { key: key, value: value, action: "remove" });
+      localStorage.removeItem(key); // 🔸 Then remove the item
     }
   </script>
 </body>

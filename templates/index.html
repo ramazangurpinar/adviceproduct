@@ -85,8 +85,13 @@
                         const botMessage = document.createElement("div");
                         botMessage.className = "d-flex justify-content-start mb-2";
                         botMessage.innerHTML = `
-                            <div class="bg-light text-dark rounded-3 p-2">
-                                ${responseText}
+                            <div class="d-flex align-items-center">
+                                <div class="bg-light text-dark rounded-3 p-2 d-flex justify-content-between align-items-center w-auto">
+                                    <span>${responseText}</sapn>
+                                    <a href="URL" target="_blank" class"ms-2">
+                                        <img src="static/image/heart.png" alt="Bot Image" style="width: 30px; height: 30px;">
+                                    </a>
+                                </div>
                             </div>
                     `   ;
                         messageContainer.appendChild(botMessage);

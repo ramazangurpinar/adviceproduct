@@ -10,7 +10,6 @@ import smtplib
 from email.mime.text import MIMEText
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
 from jinja2 import Template
-from deepseek_chat_api import chat
 from log_types import LogType
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
@@ -227,11 +226,34 @@ def testdb():
 def index():
     if 'user_id' not in session:
         return render_template("firstpage.html")
-    else:
-        user_id = session.get('user_id', None)
-        username = session.get('username', None)
-        fullname = session.get("name", "Guest") + " "+session.get("surname", "")
-    return render_template('index.html', user_id=user_id, username=username, fullname=fullname)
+
+    user_id = session.get('user_id')
+    username = session.get('username')
+    fullname = session.get("name", "Guest") + " " + session.get("surname", "")
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT conversation_id, title, created_at
+        FROM conversations
+        WHERE user_id = %s
+        ORDER BY last_activity_at DESC
+    """, (user_id,))
+    rows = cursor.fetchall()
+    columns = [desc[0] for desc in cursor.description]
+    conversations = [dict(zip(columns, row)) for row in rows]
+    conn.close()
+
+    return render_template(
+        'index.html',
+        user_id=user_id,
+        username=username,
+        fullname=fullname,
+        conversations=conversations,
+        messages=[],  # chatbox empty start
+        active_conversation_id=None
+    )
+
 
 def get_user_context(user_id, conversation_id=None):
     # get user context from database
@@ -559,6 +581,77 @@ def get_conversation_history(conversation_id):
         elif sender_type == "bot":
             history.append({"role": "bot", "content": content})
     return history
+
+
+@app.route('/conversation/<int:conversation_id>')
+def view_conversation(conversation_id):
+    user_id = session.get("user_id")
+    if not user_id:
+        return redirect(url_for("login"))
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Konuşma bilgisi
+    cursor.execute("""
+        SELECT title, created_at FROM conversations
+        WHERE conversation_id = %s AND user_id = %s
+    """, (conversation_id, user_id))
+    convo_info = cursor.fetchone()
+
+    if not convo_info:
+        conn.close()
+        flash("Conversation not found or access denied.", "danger")
+        return redirect(url_for("index"))
+
+    title, created_at = convo_info
+
+    # Mesajları getir
+    cursor.execute("""
+        SELECT sender_type, content, sent_at
+        FROM messages
+        WHERE conversation_id = %s
+        ORDER BY sent_at ASC
+    """, (conversation_id,))
+    raw_messages = cursor.fetchall()
+    messages = [
+        {
+            "sender_type": row[0],
+            "content": row[1],
+            "sent_at": row[2].strftime("%d.%m.%Y %H:%M")
+        }
+        for row in raw_messages
+    ]
+
+    # Tüm konuşmalar
+    cursor.execute("""
+        SELECT conversation_id, title, created_at
+        FROM conversations
+        WHERE user_id = %s
+        ORDER BY last_activity_at DESC
+    """, (user_id,))
+    raw_conversations = cursor.fetchall()
+    conversations = [
+        {
+            "conversation_id": row[0],
+            "title": row[1],
+            "created_at": row[2].strftime("%d %B %Y %H:%M")
+        }
+        for row in raw_conversations
+    ]
+
+    conn.close()
+    return render_template(
+        "index.html",
+        fullname=session.get("name", "Guest") + " " + session.get("surname", ""),
+        conversations=conversations,
+        messages=messages,
+        active_conversation_id=conversation_id,
+        active_title=title,
+        active_created_at=created_at.strftime("%d %B %Y %H:%M")
+    )
+
+
 
 def update_conversation_status(conversation_id, status):
     # Assuming you have a Conversation model or direct SQL query to update the status

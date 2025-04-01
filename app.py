@@ -1,4 +1,4 @@
-from flask import Flask, flash, render_template, redirect, url_for, session, request, jsonify
+from flask import Flask, render_template, redirect, url_for, session, request, jsonify
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField, IntegerField, SelectField, TextAreaField
 from wtforms.validators import DataRequired, Length, ValidationError, Optional
@@ -594,7 +594,6 @@ def view_conversation(conversation_id):
 
     if not convo_info:
         conn.close()
-        flash("Conversation not found or access denied.", "danger")
         return redirect(url_for("index"))
 
     title, created_at = convo_info
@@ -781,8 +780,6 @@ def contact():
 
         if success:
             return redirect(url_for('contact_success'))
-        else:
-            flash("Your message could not be sent. Please try again later.", "danger")
 
     return render_template('contact.html', form=form)
 
@@ -1215,7 +1212,6 @@ def reset_password(token):
 @app.route('/logout')
 def logout():
     log_action(LogType.USER_LOGGED_OUT, f"User logged out: {session.get('username', 'unknown')}", user_id=session.get('user_id'))
-    flash("You have been logged out.", category="success")
     session.pop('user_id', None)  
     session.pop('username', None) 
     session.pop('name', None) 

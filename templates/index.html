@@ -3,125 +3,352 @@
 {% block title %}Home - Botify{% endblock %}
 
 {% block content %}
-<body class="d-flex flex-column vh-100">
-    <form method="post" action="{{ url_for('index') }}" class="flex-grow-1 d-flex flex-column">
-        
-        <div class="container-fluid flex-grow-1 d-flex flex-column overflow-hidden pt-5 pb-5">
-            <div class="row flex-grow-1 overflow-hidden">
-                <div class="col-md-8 col-lg-6 mx-auto d-flex flex-column h-100">
-                    <div class="d-flex flex-column flex-grow-1 overflow-auto p-3" id="messageContainer">
-                        
-                        <div id="emptyContent" class="text-center my-auto">
-                            <div class="display-4 mb-3">
-                                <img src="{{ url_for('static', filename='image/botifylogo.png') }}" class="img-fluid d-block mx-auto" style="max-width: 150px;" alt="Logo">
-                            </div>
-                            <h1 class="mb-3">Botify</h1>
-                            <h2 class="mb-3">Hi, {{ fullname }}</h2>
-                            <p class="lead">Hi! What product would you like to purchase today?</p>
-                        </div>
-                        
+<button class="btn btn-outline-secondary position-fixed top-50 start-0 translate-middle-y rounded-end shadow-sm"
+        title="Previous Conversations"
+        style="z-index: 1050;"
+        data-bs-toggle="offcanvas"
+        data-bs-target="#conversationPanel">
+  <i class="bi bi-chevron-right"></i>
+</button>
+
+<!-- Offcanvas Panel -->
+<div class="offcanvas offcanvas-start" tabindex="-1" id="conversationPanel">
+  <div class="offcanvas-header">
+    <h5 class="offcanvas-title">Previous Conversations</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+  </div>
+  <div class="offcanvas-body">
+    <ul class="list-group">
+      {% for conv in conversations %}
+        <li class="list-group-item">
+          <a href="/conversation/{{ conv.conversation_id }}" class="text-decoration-none text-dark d-flex justify-content-between">
+            <span>{{ conv.conversation_id }} - {{ conv.title }}</span>
+            <small class="text-muted">{{ conv.created_at }}</small>
+          </a>
+        </li>
+      {% else %}
+        <li class="list-group-item text-muted">No conversations yet.</li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+<body class="d-flex flex-column vh-100"> 
+    <div class="flex-grow-1 d-flex flex-column">
+      <div class="container-fluid flex-grow-1 d-flex flex-column overflow-hidden pt-2 pb-5">
+        <div class="row flex-grow-1 overflow-hidden">
+          <div class="col-md-8 col-lg-6 mx-auto d-flex flex-column h-100">
+            <div class="d-flex flex-column flex-grow-1 overflow-hidden p-3 pb-auto" id="messageContainer" style="min-height: 0;">
+              <div id="emptyContent" class="text-center my-auto">
+                <div class="display-4 mb-3">
+                  <img src="{{ url_for('static', filename='image/botifylogo.png') }}" class="img-fluid d-block mx-auto" style="max-width: 150px;" alt="Logo">
+                </div>
+                <h1 class="mb-3">Botify</h1>
+                <h2 class="mb-3">Hi, {{ fullname }}</h2>
+                <p class="lead">
+                {% if '/conversation/' in request.path %}
+                {{ active_title }} {{ active_created_at }}
+                {% else %}
+                Hi! What product would you like to purchase today?
+                {% endif %}
+                </p>                
+              </div>
+              <div id="chat-box" class="flex-grow-1 overflow-auto h-100 d-flex flex-column gap-3 bg-white">
+                {% if messages %}
+                  {% for msg in messages %}
+                    <div class="d-flex flex-column align-self-{{ 'end' if msg.sender_type == 'user' else 'start' }} bg-{{ 'primary-subtle' if msg.sender_type == 'user' else 'light' }} p-2 rounded-3 mb-2 shadow-sm" style="max-width: 60%;">
+                      <strong class="text-{{ 'primary' if msg.sender_type == 'user' else 'success' }}">{{ msg.sender_type|title }}:</strong>
+                      <div>{{ msg.content }}</div>
+                      <div class="text-muted small mt-1 text-end" title="{{ msg.sent_at }}">
+                        {{ msg.sent_at }}
+                      </div>
                     </div>
-                </div>
+                  {% endfor %}
+              
+                  {# New Chat Button #}
+                  {% if '/conversation/' in request.path %}
+                  <div class="mt-3 text-center">
+                    <a href="{{ url_for('index') }}" class="btn btn-outline-primary rounded-pill shadow-sm">
+                      <i class="bi bi-plus-circle"></i> Start New Conversation
+                    </a>
+                  </div>
+                  {% endif %}
+                  {% endif %}
+                <p id="noMessagesInfo" class="text-center text-muted"> No messages in this conversation.</p>
+              </div>
             </div>
+          </div>
         </div>
+      </div>
+      <div class="position-fixed bottom-0 start-0 end-0 bg-light border-top py-3 px-2"
+        {% if '/conversation/' in request.path %}
+          style="display: none;"
+        {% endif %}>
+        <div class="container">
+          <div class="d-flex justify-content-between align-items-end gap-2">
+            <div class="d-flex align-items-end gap-2 w-100" style="max-width: 900px;">
+              <div class="position-relative w-100" style="max-width: 900px;">
+                <textarea 
+                  id="messageInput"
+                  class="form-control border-0 box-shadow pe-5 py-2 rounded-3"
+                  placeholder="Message Botify..."
+                  rows="1"
+                  style="min-height: 72px; max-height: 200px; overflow-y: auto; resize: none;"
+                  autofocus
+                ></textarea>
 
-        <div class="bg-light border-top fixed-bottom">
-            <div class="container">
-                <div class="row py-3">
-                    <div class="col-md-8 col-lg-6 mx-auto">
-                        <div class="input-group">
-                            <textarea class="form-control" id="messageInput" placeholder="Message Botify..." rows="1" autofocus></textarea>
-                            <button class="btn btn-primary" id="sendButton" disabled type="button">
-                                <i class="bi bi-send"></i>
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                <!-- Send -->
+                  <button 
+                  id="sendButton" 
+                  type="button" 
+                  class="btn btn-primary position-absolute d-flex align-items-center justify-content-center shadow-sm"
+                  style="width: 40px; height: 40px; bottom: 6px; right: 20px; border-radius: 50%;"
+                  onclick="sendMessage()"
+                  disabled
+                >
+                  <i class="bi bi-send"></i>
+                </button>
+              </div>
             </div>
+            <form id="endChatForm" action="/end_chat" method="post" class="m-0 p-0 d-none">
+              <input type="hidden" id="conversation_id_input" name="conversation_id" />
+              <button type="submit" class="btn btn-outline-danger d-flex align-items-center gap-1 px-3 rounded-pill shadow-sm">
+                <i class="bi bi-x-circle"></i>
+                <span>End</span>
+              </button>
+            </form>
+          </div>
         </div>
+      </div>  
+    </div>
+  </body>
+  <script src="https://cdn.socket.io/4.3.2/socket.io.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  
+  <script>
+  const socket = io();
+  const chatBox = document.getElementById('chat-box');
+  const messageInput = document.getElementById('messageInput');
+  const endChatForm = document.getElementById("endChatForm");
+  const sendButton = document.getElementById("sendButton");
+  const emptyContent = document.getElementById("emptyContent"); 
+  const noMessagesElement = document.getElementById("noMessagesInfo");   
 
-    </form>
+  window.addEventListener("DOMContentLoaded", () => {
+      localStorage.clear();
+      const mainContent = document.querySelector(".main-content");
+      if (mainContent) {
+        mainContent.style.paddingBottom = "60px";
+      }
+            
+  });
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-    document.addEventListener("DOMContentLoaded", function () {
-        const messageInput = document.getElementById("messageInput");
-        const sendButton = document.getElementById("sendButton");
-        const messageContainer = document.getElementById("messageContainer");
-        const emptyContent = document.getElementById("emptyContent");
+  window.addEventListener("beforeunload", function() {
+      localStorage.clear();
+  });
 
-        messageInput.addEventListener("input", function () {
-            sendButton.disabled = this.value.trim() === "";
-        });
+  messageInput.addEventListener("input", function () {
+    if (messageInput.value.trim() === '') {
+      sendButton.disabled = true;
+    } else {
+      sendButton.disabled = false;
+    }
+    
+    this.style.height = "auto"; 
+    this.style.height = Math.min(this.scrollHeight, 136) + "px";
+  });    
 
-        function sendMessage() {
-            const message = messageInput.value.trim();
-            if (message === "") return;
+  function scrollToBottom() {
+      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+  }
 
-            if (emptyContent.style.display !== "none") {
-                emptyContent.style.display = "none";
-            }
+  socket.on('connect', () => {
+      console.log('Connected to server');
+      socket.emit("session_check");
 
-            const userMessage = document.createElement("div");
-            userMessage.className = "d-flex justify-content-end mb-2";
-            userMessage.innerHTML = `
-                <div class="bg-primary text-white rounded-3 p-2">
-                    ${message}
-                </div>
-        `   ;
-            messageContainer.appendChild(userMessage);
+      // Force sync from localStorage to session on reload
+      const storedConvId = localStorage.getItem("conversation_id");
+      if (storedConvId) {
+          socket.emit("localstorage_sync", {
+              key: "conversation_id",
+              value: storedConvId,
+              action: "set"
+          });
+      }
+  });
 
-            fetch("/chat", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({ message: message })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (Array.isArray(data.response)) {
-                    data.response.forEach(responseText => {
-                        const botMessage = document.createElement("div");
-                        botMessage.className = "d-flex justify-content-start mb-2";
-                        botMessage.innerHTML = `
-                            <div class="d-flex align-items-center">
-                                <div class="bg-light text-dark rounded-3 p-2 d-flex justify-content-between align-items-center w-auto">
-                                    <span>${responseText}</sapn>
-                                    <a href="URL" target="_blank" class"ms-2">
-                                        <img src="static/image/heart.png" alt="Bot Image" style="width: 30px; height: 30px;">
-                                    </a>
-                                </div>
-                            </div>
-                    `   ;
-                        messageContainer.appendChild(botMessage);
-                    });
-                } else {
-                    const botMessage = document.createElement("div");
-                    botMessage.className = "d-flex justify-content-start mb-2";
-                    botMessage.innerHTML = `
-                        <div class="bg-light text-dark rounded-3 p-2">
-                            ${data.response}
-                        </div>
-                `   ;
-                    messageContainer.appendChild(botMessage);
-                }
-                messageContainer.scrollTop = messageContainer.scrollHeight;
-            })
-            .catch(error => console.error("Error:", error));
+  socket.on('bot_reply', function(data) {
+      if (emptyContent) emptyContent.style.display = "none";
+      const reply = data.content;
 
-            messageInput.value = "";
-            sendButton.disabled = true;
-        }
+      if (Array.isArray(reply)) {
+          reply.forEach(item => {
+              const messageElement = createBotMessage(item);
+              chatBox.appendChild(messageElement);
+          });
+      } else {
+          const messageElement = createPlainBotMessage(reply);
+          chatBox.appendChild(messageElement);
+      }
 
-        sendButton.addEventListener("click", sendMessage);
-        messageInput.addEventListener("keypress", function (event) {
-            if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
-                sendMessage();
-            }
-        });
-    });
-    </script>
-</body>
+      scrollToBottom();
+  });
+
+  function createBotMessage(item) {
+    const div = document.createElement('div');
+    div.className = "d-flex flex-column align-self-start bg-light p-2 rounded-3 mb-2 shadow-sm";
+    div.style.maxWidth = "60%";
+
+    const botLabel = document.createElement('strong');
+    botLabel.className = "text-success";
+    botLabel.textContent = 'Bot:';
+
+    const productName = document.createElement('b');
+    productName.className = "text-dark";
+    productName.textContent = item.name;
+
+    const productDescription = document.createElement('div');
+    productDescription.className = "text-body";
+    productDescription.textContent = item.description;
+
+    div.appendChild(botLabel);
+    div.appendChild(productName);
+    div.appendChild(productDescription);
+
+    return div;
+  }
+
+
+  function createPlainBotMessage(text) {
+    const div = document.createElement('div');
+    div.className = "d-flex flex-column align-self-start bg-light p-2 rounded-3 mb-2 shadow-sm";
+    div.style.maxWidth = "60%";
+
+    const botLabel = document.createElement('strong');
+    botLabel.className = "text-success";
+    botLabel.textContent = 'Bot:';
+
+    const message = document.createElement('div');
+    message.textContent = text;
+
+    div.appendChild(botLabel);
+    div.appendChild(message);
+
+    return div;
+  }
+
+  socket.on('info_message', function(data) {
+      if (data.content.includes("has expired")) {
+          localStorage.removeItem("conversation_id");
+          console.log("Session expired → conversation_id is deleted from localStorage.");
+      }
+      chatBox.innerHTML += `<div class="message info"><em>${data.content}</em></div>`;
+      scrollToBottom();
+  });
+
+  socket.on("conversation_initialized", function(data) {
+      if (data.conversation_id) {
+          updateLocalStorage("conversation_id", data.conversation_id);
+      }
+  });
+
+  function sendMessage() {
+      const content = messageInput.value.trim();
+      if (content === '') return;
+
+      if (emptyContent) emptyContent.style.display = "none";
+      console.log(noMessagesElement)
+      console.log(noMessagesElement.style)
+      console.log(noMessagesElement.style.display)
+      if (noMessagesElement) noMessagesElement.style.display = "none";
+
+      socket.emit('user_message', {
+          content: content
+      });
+
+      chatBox.innerHTML += `
+                      <div class="d-flex flex-column align-self-end bg-primary-subtle p-2 rounded-3 mb-2 shadow-sm" style="max-width: 60%;">
+                        <strong class="text-primary">You:</strong>
+                        <div>${content}</div>
+                      </div>`;
+
+
+      messageInput.value = '';
+      if (endChatForm.classList.contains("d-none")) endChatForm.classList.remove("d-none");
+      scrollToBottom();
+  }
+
+  (function setupEnterHandler() {
+      let enterPressed = false;
+
+      messageInput.addEventListener("keydown", function(event) {
+          if (event.key === "Enter") {
+              if (!event.shiftKey) {
+                  event.preventDefault();
+                  enterPressed = true;
+              }
+          }
+      });
+
+      messageInput.addEventListener("keyup", function(event) {
+          if (event.key === "Enter" && enterPressed) {
+              enterPressed = false;
+              sendMessage();
+          }
+      });
+  })();
+
+  if (endChatForm) {
+      endChatForm.addEventListener("submit", (e) => {
+          const convId = localStorage.getItem("conversation_id");
+
+          if (convId) {
+              e.preventDefault(); // ❗ Formun varsayılan gönderimini geçici olarak engelle
+
+              const inputField = document.getElementById("conversation_id_input");
+              if (inputField) {
+                  inputField.value = convId;
+                  console.log(`📤 Hidden input updated with conversation_id: ${convId}`);
+              } else {
+                  console.warn("⚠️ Hidden input (conversation_id_input) not found.");
+              }
+
+              // localStorage'dan silmeden önce socket'e bildir
+              socket.emit("localstorage_sync", {
+                  key: "conversation_id",
+                  value: convId,
+                  action: "remove"
+              });
+
+              localStorage.removeItem("conversation_id");
+              console.log(`🧹 conversation_id removed from localStorage (value was: ${convId})`);
+
+              // ✅ Formu manuel olarak gönder
+              endChatForm.submit();
+          }
+      });
+  } else {
+      console.error("❌ endChatForm not found!");
+  }
+
+  function updateLocalStorage(key, value) {
+      localStorage.setItem(key, value);
+      socket.emit("localstorage_sync", {
+          key: key,
+          value: value,
+          action: "set"
+      });
+      console.log(`📥 localStorage key updated "${key}" updated → value: ${value}`);
+  }
+
+  function removeLocalStorage(key) {
+      const value = localStorage.getItem(key); // 🔹 Get the value before removing
+      console.log(`🗑️ localStorage key "${key}" removed with value: ${value}`);
+      socket.emit("localstorage_sync", {
+          key: key,
+          value: value,
+          action: "remove"
+      });
+      localStorage.removeItem(key); // 🔸 Then remove the item
+  } 
+</script>
 {% endblock %}

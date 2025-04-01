@@ -3,35 +3,51 @@
 {% block title %}Home - Botify{% endblock %}
 
 {% block content %}
-<button class="btn btn-outline-secondary position-fixed top-50 start-0 translate-middle-y rounded-end shadow-sm"
-        title="Previous Conversations"
-        style="z-index: 1050;"
-        data-bs-toggle="offcanvas"
-        data-bs-target="#conversationPanel">
-  <i class="bi bi-chevron-right"></i>
+<!-- Floating Sidebar Button -->
+<button 
+  class="btn btn-outline-secondary position-fixed top-50 start-0 translate-middle-y rounded-end shadow-sm"
+  title="Previous Conversations"
+  style="z-index: 1050;"
+  data-bs-toggle="offcanvas"
+  data-bs-target="#conversationPanel"
+>
+  <i class="bi bi-chat-left-text"></i>
 </button>
 
 <!-- Offcanvas Panel -->
-<div class="offcanvas offcanvas-start" tabindex="-1" id="conversationPanel">
-  <div class="offcanvas-header">
-    <h5 class="offcanvas-title">Previous Conversations</h5>
-    <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+<div class="offcanvas offcanvas-start" tabindex="-1" id="conversationPanel" aria-labelledby="conversationPanelLabel">
+  <div class="offcanvas-header border-bottom">
+    <h5 class="offcanvas-title" id="conversationPanelLabel">Previous Conversations</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
   </div>
-  <div class="offcanvas-body">
-    <ul class="list-group">
-      {% for conv in conversations %}
-        <li class="list-group-item">
-          <a href="/conversation/{{ conv.conversation_id }}" class="text-decoration-none text-dark d-flex justify-content-between">
-            <span>{{ conv.conversation_id }} - {{ conv.title }}</span>
-            <small class="text-muted">{{ conv.created_at }}</small>
-          </a>
-        </li>
-      {% else %}
-        <li class="list-group-item text-muted">No conversations yet.</li>
-      {% endfor %}
-    </ul>
+
+  <div class="offcanvas-body p-0">
+    {% if conversations %}
+      <ul class="list-group list-group-flush">
+        {% for conv in conversations %}
+          <li class="list-group-item px-3 py-2 list-group-item-action">
+            <a 
+              href="/conversation/{{ conv.conversation_id }}" 
+              class="d-flex justify-content-between align-items-center text-decoration-none text-dark w-100"
+              style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
+              title="{{ conv.title }}"
+            >
+              <span class="text-truncate d-inline-block" style="max-width: 70%;" title="{{ conv.title }}">
+                {{ conv.title }}
+              </span>
+              <small class="text-muted flex-shrink-0">{{ conv.created_at }}</small>
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <div class="text-center text-muted py-4">
+        No conversations yet.
+      </div>
+    {% endif %}
   </div>
 </div>
+
 <body class="d-flex flex-column vh-100"> 
     <div class="flex-grow-1 d-flex flex-column">
       <div class="container-fluid flex-grow-1 d-flex flex-column overflow-hidden pt-2 pb-5">
@@ -46,7 +62,11 @@
                 <h2 class="mb-3">Hi, {{ fullname }}</h2>
                 <p class="lead">
                 {% if '/conversation/' in request.path %}
-                {{ active_title }} {{ active_created_at }}
+                <strong>
+                {{ active_title }} 
+                </strong>
+                <br>
+                {{ active_created_at }}
                 {% else %}
                 Hi! What product would you like to purchase today?
                 {% endif %}
@@ -162,7 +182,6 @@
   }
 
   socket.on('connect', () => {
-      console.log('Connected to server');
       socket.emit("session_check");
 
       // Force sync from localStorage to session on reload
@@ -239,7 +258,6 @@
   socket.on('info_message', function(data) {
       if (data.content.includes("has expired")) {
           localStorage.removeItem("conversation_id");
-          console.log("Session expired → conversation_id is deleted from localStorage.");
       }
       chatBox.innerHTML += `<div class="message info"><em>${data.content}</em></div>`;
       scrollToBottom();
@@ -256,9 +274,6 @@
       if (content === '') return;
 
       if (emptyContent) emptyContent.style.display = "none";
-      console.log(noMessagesElement)
-      console.log(noMessagesElement.style)
-      console.log(noMessagesElement.style.display)
       if (noMessagesElement) noMessagesElement.style.display = "none";
 
       socket.emit('user_message', {
@@ -302,17 +317,13 @@
           const convId = localStorage.getItem("conversation_id");
 
           if (convId) {
-              e.preventDefault(); // ❗ Formun varsayılan gönderimini geçici olarak engelle
+              e.preventDefault();
 
               const inputField = document.getElementById("conversation_id_input");
               if (inputField) {
                   inputField.value = convId;
-                  console.log(`📤 Hidden input updated with conversation_id: ${convId}`);
-              } else {
-                  console.warn("⚠️ Hidden input (conversation_id_input) not found.");
               }
 
-              // localStorage'dan silmeden önce socket'e bildir
               socket.emit("localstorage_sync", {
                   key: "conversation_id",
                   value: convId,
@@ -320,14 +331,10 @@
               });
 
               localStorage.removeItem("conversation_id");
-              console.log(`🧹 conversation_id removed from localStorage (value was: ${convId})`);
-
-              // ✅ Formu manuel olarak gönder
               endChatForm.submit();
           }
       });
   } else {
-      console.error("❌ endChatForm not found!");
   }
 
   function updateLocalStorage(key, value) {
@@ -337,12 +344,10 @@
           value: value,
           action: "set"
       });
-      console.log(`📥 localStorage key updated "${key}" updated → value: ${value}`);
   }
 
   function removeLocalStorage(key) {
       const value = localStorage.getItem(key); // 🔹 Get the value before removing
-      console.log(`🗑️ localStorage key "${key}" removed with value: ${value}`);
       socket.emit("localstorage_sync", {
           key: key,
           value: value,

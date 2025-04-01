@@ -394,7 +394,6 @@ def save_message(conversation_id, sender_type, content):
 MAX_TOKENS = 6000
 
 def remove_thinking_tags(input_string):
-    import re
     cleaned_string = re.sub(r'<think>.*?</think>', '', input_string, flags=re.DOTALL)
     return cleaned_string
 
@@ -690,10 +689,88 @@ def end_chat():
     try:
         update_conversation_status(conversation_id, 0)
         save_message(conversation_id, 'bot', 'Conversation ended.')
+
+        final_title = generate_ai_title_from_keywords(conversation_id)
+        print("Generated Title:", final_title)
+        update_conversation_title(conversation_id, final_title)        
+        
         return redirect(url_for('index'))
     except Exception as e:
         print(f"Error ending conversation: {e}")
         return redirect(url_for('404'))
+
+def extract_title_from_llm_output(cleaned_text):
+    match = re.search(r"<TITLE>(.*?)</TITLE>", cleaned_text, re.IGNORECASE | re.DOTALL)
+    if match:
+        title = match.group(1).strip()
+        word_count = len(title.split())
+        if 2 <= word_count <= 15:
+            return title
+        else:
+            print(f"Invalid title word count ({word_count}): '{title}'")
+    else:
+        print("<TITLE> tag not found in LLM output.")
+    return None
+
+def get_keywords_for_conversation(conversation_id):
+    cursor = mysql.connection.cursor()
+    cursor.execute("SELECT keywords FROM conversations WHERE conversation_id = %s", (conversation_id,))
+    result = cursor.fetchone()
+    cursor.close()
+
+    if not result or not result[0]:
+        return []
+    return [k.strip() for k in result[0].split(',') if k.strip()]
+
+def generate_ai_title_from_keywords(conversation_id):
+    keywords = get_keywords_for_conversation(conversation_id)
+    if not keywords:
+        return "Chat Session"
+
+    keyword_text = ", ".join(keywords)
+
+    system_prompt = """
+    You are a product recommendation assistant.
+
+    Your ONLY task is to generate a title based on a list of keywords from a user conversation.
+
+    Follow these strict rules:
+    1. Wrap the title with <TITLE> and </TITLE> tags.
+    2. The title must be between 5 and 10 words.
+    3. DO NOT include any other tags like <think>, <response>, or explanations.
+    4. DO NOT explain, comment, list, or return anything except the title.
+    5. Output must contain ONLY the <TITLE> tag and the final title.
+
+    Example:
+    <TITLE>Best Budget Smartphones for Gaming Enthusiasts</TITLE>
+    """
+
+    user_prompt = f"Keywords: {keyword_text}"
+    print(f"[🧠 PROMPT] {system_prompt}")
+    
+    try:
+        response = deepseek_chat([
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=user_prompt)
+        ])
+        print(f"[🧠 RESPONSE - response.content:] {response.content}")
+
+        bot_reply_title = remove_thinking_tags(response.content)
+        print(f"[🧠 CLEANED bot_reply_title] {bot_reply_title}")
+        title = extract_title_from_llm_output(bot_reply_title)
+        return title or f"{keyword_text}"
+    except Exception as e:
+        print(f"❌ AI title generation failed: {e}")
+        return f"Chat Session: {keyword_text}"
+
+
+def update_conversation_title(conversation_id, new_title):
+    cursor = mysql.connection.cursor()
+    cursor.execute("""
+        UPDATE conversations SET title = %s WHERE conversation_id = %s
+    """, (new_title, conversation_id))
+    mysql.connection.commit()
+    cursor.close()
 
 @app.route('/contact', methods=['GET', 'POST'])
 def contact():

@@ -1,7 +1,0 @@
-Piero: I got an error when I change mi username. If the first username inserted already exists in the database, even if you try to insert a n other username
-the interface give in output an error. (only frontend problem, username correctly updated in the DB) --> FIXED
-
-Piero: From the page of resetting password is not possible to go back to the login
-
-Piero: On the Hello page after clicking on contact us and sending an email there's no feedback from the page (FIX: redirectiono to Hello page
-or panel for feedback)

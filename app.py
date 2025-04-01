@@ -557,11 +557,6 @@ def handle_user_message(data):
     else:
         emit("bot_reply", {"content": bot_reply})
 
-
-@app.route('/chat',endpoint='smartbot_chat')
-def chat_page():
-    return render_template('chat.html')
-
 def get_conversation_history(conversation_id):
     cursor = mysql.connection.cursor()
     cursor.execute("""
@@ -591,7 +586,6 @@ def view_conversation(conversation_id):
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Konuşma bilgisi
     cursor.execute("""
         SELECT title, created_at FROM conversations
         WHERE conversation_id = %s AND user_id = %s
@@ -605,7 +599,6 @@ def view_conversation(conversation_id):
 
     title, created_at = convo_info
 
-    # Mesajları getir
     cursor.execute("""
         SELECT sender_type, content, sent_at
         FROM messages
@@ -622,7 +615,6 @@ def view_conversation(conversation_id):
         for row in raw_messages
     ]
 
-    # Tüm konuşmalar
     cursor.execute("""
         SELECT conversation_id, title, created_at
         FROM conversations
@@ -649,8 +641,6 @@ def view_conversation(conversation_id):
         active_title=title,
         active_created_at=created_at.strftime("%d %B %Y %H:%M")
     )
-
-
 
 def update_conversation_status(conversation_id, status):
     # Assuming you have a Conversation model or direct SQL query to update the status

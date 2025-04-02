@@ -196,84 +196,73 @@
   });
 
   socket.on('bot_reply', function(data) {
-      if (emptyContent) emptyContent.style.display = "none";
-      const reply = data.content;
+    if (emptyContent) emptyContent.style.display = "none";
 
-      if (Array.isArray(reply)) {
-          reply.forEach(item => {
-              const messageElement = createBotMessage(item);
-              chatBox.appendChild(messageElement);
-          });
-      } else {
-          const messageElement = createPlainBotMessage(reply);
-          chatBox.appendChild(messageElement);
-      }
+    if (Array.isArray(data.products)) {
+        const messageId = data.message_id;
+        const conversationId = data.conversation_id;
+        const userId = data.user_id;
 
-      scrollToBottom();
-  });
-
-  function createBotMessage(item) {
-  const div = document.createElement('div');
-  div.className = "d-flex flex-row align-items-start bg-light p-2 rounded-3 mb-2 shadow-sm";
-  div.style.maxWidth = "60%";
-
-  const contentContainer = document.createElement('div');
-  contentContainer.className = "d-flex flex-column flex-grow-1";
-
-  const botLabel = document.createElement('strong');
-  botLabel.className = "text-success";
-  botLabel.textContent = 'Bot:';
-
-  const productName = document.createElement('b');
-  productName.className = "text-dark";
-  productName.textContent = item.name;
-
-  const productDescription = document.createElement('div');
-  productDescription.className = "text-body";
-  productDescription.textContent = item.description;
-
-  const button = document.createElement('button');
-  button.className = "btn p-0 border-0 bg-transparent ms-2";
-
-  const botIcon = document.createElement('img');
-  botIcon.src = "{{ url_for('static', filename='image/heart.png') }}";
-  botIcon.alt = "Heart Icon";
-  botIcon.width = 30;
-  botIcon.height = 30;
-  botIcon.className = "rounded-circle";
-
-  button.appendChild(botIcon);
-  
-  let isLiked = false;
-
-  button.addEventListener('click', async () => {
-    isLiked = !isLiked;
-    botIcon.src = isLiked
-      ? "{{ url_for('static', filename='image/heart-full.png') }}"
-      : "{{ url_for('static', filename='image/heart.png') }}";
-
-      if (isLiked) {
-        socket.emit('like', {
-            itemId: item.id,
-            name: item.name,
-            description: item.description
-            });
-    } else {
-        socket.emit('unlike', {
-        itemId: item.id
+        data.products.forEach(item => {
+            const messageElement = createBotMessage(item, messageId, conversationId, userId);
+            chatBox.appendChild(messageElement);
         });
+    } else {
+        const messageElement = createPlainBotMessage(data.content);
+        chatBox.appendChild(messageElement);
     }
+
+    scrollToBottom();
   });
 
-  contentContainer.appendChild(botLabel);
-  contentContainer.appendChild(productName);
-  contentContainer.appendChild(productDescription);
+  function createBotMessage(item, messageId, conversationId, userId) {
+    const div = document.createElement('div');
+    div.className = "d-flex flex-column align-self-start bg-light p-2 rounded-3 mb-2 shadow-sm position-relative";
+    div.style.maxWidth = "60%";
 
-  div.appendChild(contentContainer);
-  div.appendChild(button);
+    const botLabel = document.createElement('strong');
+    botLabel.className = "text-success";
+    botLabel.textContent = 'Bot:';
 
-  return div;
-}
+    const productName = document.createElement('b');
+    productName.className = "text-dark";
+    productName.textContent = item.name;
+
+    const productDescription = document.createElement('div');
+    productDescription.className = "text-body";
+    productDescription.textContent = item.description;
+
+    const likeIcon = document.createElement("i");
+    likeIcon.className = "bi bi-heart position-absolute top-0 end-0 m-2 fs-5 text-danger";
+    likeIcon.style.cursor = "pointer";
+    likeIcon.setAttribute("data-liked", "false");
+
+    likeIcon.addEventListener("click", () => {
+      const isLiked = likeIcon.getAttribute("data-liked") === "true";
+      const newLiked = !isLiked;
+
+      likeIcon.className = newLiked
+        ? "bi bi-heart-fill position-absolute top-0 end-0 m-2 fs-5 text-danger"
+        : "bi bi-heart position-absolute top-0 end-0 m-2 fs-5 text-danger";
+
+      likeIcon.setAttribute("data-liked", newLiked.toString());
+
+      socket.emit("toggle_like", {
+        product_name: item.name,
+        message_id: messageId,
+        conversation_id: conversationId,
+        user_id: userId,
+        liked: newLiked
+      });
+    });
+
+    div.appendChild(botLabel);
+    div.appendChild(productName);
+    div.appendChild(productDescription);
+    div.appendChild(likeIcon);
+
+    return div;
+  }
 
   function createPlainBotMessage(text) {
     const div = document.createElement('div');

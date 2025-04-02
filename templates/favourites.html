@@ -1,58 +1,33 @@
 {% extends "master.html" %}
 
-{% block title %}Home - Botify{% endblock %}
+{% block title %}Favourites - Botify{% endblock %}
 
 {% block content %}
-<body>
-    <div class="container mt-5">
-        <h2 class="text-center mb-4">Saved products</h2>
-        <div class="row" id="product-list">
-            <!-- Products will be dynamically inserted here -->
-        </div>
-    </div>
+<div class="container my-5">
+    <h2 class="mb-4 text-center">❤️ Your Favourite Products</h2>
 
-    <script>
-        document.addEventListener("DOMContentLoaded", function () {
-            // Function to fetch products based on a query
-            function fetchProducts(query) {
-                // Simulating a database query result
-                const allProducts = [
-                    { id: 1, name: "Laptop Dell", description: "High-performance Dell laptop."},
-                    { id: 2, name: "iPhone 14", description: "Latest Apple iPhone with advanced features."},
-                    { id: 3, name: "Samsung Galaxy S23", description: "Powerful Samsung smartphone."}
-                ];
-                
-                // Filtering products based on query
-                return allProducts.filter(product => product.name.toLowerCase().includes(query.toLowerCase()));
-            }
-
-            // Example query (this can be dynamically set based on user input)
-            const query = "iPhone"; // Modify this query dynamically as needed
-            const products = fetchProducts(query);
-            
-            const productList = document.getElementById("product-list");
-            productList.innerHTML = ""; // Clear existing content
-
-            products.forEach(product => {
-                const googleSearchUrl = `https://www.google.com/search?q=${encodeURIComponent(product.name)}`;
-                const productHTML = `
-                    <div class="col-md-12">
-                        <div class="card mb-3">
-                            <div class="row g-0">
-                                <div class="col-md-8">
-                                    <div class="card-body">
-                                        <h5 class="card-title">${product.name}</h5>
-                                        <p class="card-text">${product.description}</p>
-                                        <a href="${googleSearchUrl}" target="_blank" class="btn btn-primary">Search on Google</a>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+    {% if products %}
+        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+            {% for product in products %}
+            <div class="col">
+                <div class="card shadow-sm h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">{{ product.name }}</h5>
+                        <p class="card-text">{{ product.description }}</p>
                     </div>
-                `;
-                productList.innerHTML += productHTML;
-            });
-        });
-    </script>
-</body>
+                    <div class="card-footer text-muted small">
+                        From: <strong>{{ product.conversation_title }}</strong><br>
+                        Suggested on: {{ product.sent_at }}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="text-center text-muted mt-5">
+            <i class="bi bi-heart fs-1"></i>
+            <p class="lead mt-3">You haven't liked any products yet.</p>
+        </div>
+    {% endif %}
+</div>
 {% endblock %}

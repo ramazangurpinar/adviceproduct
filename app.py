@@ -528,6 +528,43 @@ def update_conversation_title(conversation_id, new_title):
     cursor.close()
 
 ### SocketIO Events
+def save_product_suggestions(user_id, conversation_id, message_id, structured_products):
+    cursor = mysql.connection.cursor()
+
+    for product in structured_products:
+        product_name = product.get("name")
+        product_description = product.get("description")
+
+        cursor.execute("""
+            INSERT INTO product_suggestions (
+                conversation_id, message_id, user_id,
+                product_name, product_description
+            ) VALUES (%s, %s, %s, %s, %s)
+        """, (
+            conversation_id, message_id, user_id,
+            product_name, product_description
+        ))
+
+    mysql.connection.commit()
+    cursor.close()
+
+@socketio.on("toggle_like")
+def handle_toggle_like(data):
+    user_id = data.get("user_id")
+    message_id = data.get("message_id")
+    conversation_id = data.get("conversation_id")
+    product_name = data.get("product_name")
+    liked = data.get("liked")
+
+    cursor = mysql.connection.cursor()
+    cursor.execute("""
+        UPDATE product_suggestions
+        SET liked = %s
+        WHERE user_id = %s AND message_id = %s AND conversation_id = %s AND product_name = %s
+        LIMIT 1
+    """, (1 if liked else 0, user_id, message_id, conversation_id, product_name))
+    mysql.connection.commit()
+    cursor.close()
 
 @socketio.on("session_check")
 def handle_session_check():
@@ -556,30 +593,6 @@ def handle_localstorage_sync(data):
 
 ###########################
 
-@socketio.on("like")
-def handle_like(data):
-    user_id = session.get("user_id")
-    if not user_id:
-        emit("info_message", {"content": "Please log in to like items."})
-        return
-    
-    item_id = data.get("item_id")
-    item_name = data.get("name")
-    item_description = data.get("description")
-    conversation_id = session.get("conversation_id")
-    
-    print(f"❤️ User {user_id} liked item {item_id} in conversation {conversation_id}")
-    
-@socketio.on("unlike")
-def handle_unlike(data):
-    user_id = session.get("user_id")
-    if not user_id:
-        emit("info_message", {"content": "Please log in to unlike items."})
-        return
-    
-    item_id = data.get("item_id")
-    
-    print(f"💔 User {user_id} unliked item {item_id}")
 
 ################
 
@@ -634,9 +647,20 @@ def handle_user_message(data):
     # 💾 Save bot's reply to the database
     save_message(conversation_id, 'bot', bot_reply)
 
+    cursor = mysql.connection.cursor()
+    cursor.execute("SELECT LAST_INSERT_ID()")
+    message_id = cursor.fetchone()[0]
+    cursor.close()    
+
     # 🚀 Send bot's reply to frontend in real-time
     if structured:
-        emit("bot_reply", {"content": structured})
+        save_product_suggestions(user_id, conversation_id, message_id, structured)
+        emit("bot_reply", {
+            "products": structured,
+            "message_id": message_id,
+            "conversation_id": conversation_id,
+            "user_id": user_id
+        })
     else:
         emit("bot_reply", {"content": bot_reply})
 
@@ -798,13 +822,36 @@ def end_chat():
         print(f"Error ending conversation: {e}")
         return redirect(url_for('404'))
 
-@app.route('/favourites', methods=['GET', 'POST'])
+@app.route('/favourites')
 def favourites():
     if 'user_id' not in session:
         return redirect(url_for('login'))
-    
-    return render_template('favourites.html')
 
+    user_id = session['user_id']
+    cursor = mysql.connection.cursor()
+
+    cursor.execute("""
+        SELECT ps.product_name, ps.product_description, c.title AS conversation_title, m.sent_at
+        FROM product_suggestions ps
+        JOIN conversations c ON ps.conversation_id = c.conversation_id
+        JOIN messages m ON ps.message_id = m.message_id
+        WHERE ps.user_id = %s AND ps.liked = 1
+        ORDER BY m.sent_at DESC
+    """, (user_id,))
+
+    rows = cursor.fetchall()
+    cursor.close()
+
+    products = [
+        {
+            "name": row[0],
+            "description": row[1],
+            "conversation_title": row[2],
+            "sent_at": row[3].strftime("%d %B %Y %H:%M")
+        } for row in rows
+    ]
+
+    return render_template("favourites.html", products=products)
 ### Contact / Help
 
 @app.route('/contact', methods=['GET', 'POST'])

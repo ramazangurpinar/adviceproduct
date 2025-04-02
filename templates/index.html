@@ -213,29 +213,69 @@
   });
 
   function createBotMessage(item) {
-    const div = document.createElement('div');
-    div.className = "d-flex flex-column align-self-start bg-light p-2 rounded-3 mb-2 shadow-sm";
-    div.style.maxWidth = "60%";
+  const div = document.createElement('div');
+  div.className = "d-flex flex-row align-items-start bg-light p-2 rounded-3 mb-2 shadow-sm";
+  div.style.maxWidth = "60%";
 
-    const botLabel = document.createElement('strong');
-    botLabel.className = "text-success";
-    botLabel.textContent = 'Bot:';
+  const contentContainer = document.createElement('div');
+  contentContainer.className = "d-flex flex-column flex-grow-1";
 
-    const productName = document.createElement('b');
-    productName.className = "text-dark";
-    productName.textContent = item.name;
+  const botLabel = document.createElement('strong');
+  botLabel.className = "text-success";
+  botLabel.textContent = 'Bot:';
 
-    const productDescription = document.createElement('div');
-    productDescription.className = "text-body";
-    productDescription.textContent = item.description;
+  const productName = document.createElement('b');
+  productName.className = "text-dark";
+  productName.textContent = item.name;
 
-    div.appendChild(botLabel);
-    div.appendChild(productName);
-    div.appendChild(productDescription);
+  const productDescription = document.createElement('div');
+  productDescription.className = "text-body";
+  productDescription.textContent = item.description;
 
-    return div;
-  }
+  const button = document.createElement('button');
+  button.className = "btn p-0 border-0 bg-transparent ms-2";
 
+  const botIcon = document.createElement('img');
+  botIcon.src = "{{ url_for('static', filename='image/heart.png') }}";
+  botIcon.alt = "Heart Icon";
+  botIcon.width = 30;
+  botIcon.height = 30;
+  botIcon.className = "rounded-circle";
+
+  button.appendChild(botIcon);
+  
+  let isLiked = false;
+
+  button.addEventListener('click', async () => {
+    isLiked = !isLiked;
+    botIcon.src = isLiked
+      ? "{{ url_for('static', filename='image/heart-full.png') }}" // Cuore pieno
+      : "{{ url_for('static', filename='image/heart.png') }}"; // Cuore vuoto
+
+    try {
+      const response = await fetch('/api/save_message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sender: "bot", content: item.description })
+      });
+
+      if (!response.ok) throw new Error("Failed to save message");
+
+      console.log("Message saved successfully");
+    } catch (error) {
+      console.error("Error saving message:", error);
+    }
+  });
+
+  contentContainer.appendChild(botLabel);
+  contentContainer.appendChild(productName);
+  contentContainer.appendChild(productDescription);
+
+  div.appendChild(contentContainer);
+  div.appendChild(button);
+
+  return div;
+}
 
   function createPlainBotMessage(text) {
     const div = document.createElement('div');

@@ -554,6 +554,35 @@ def handle_localstorage_sync(data):
             print(f"🧹 conversation_id removed from session due to localStorage removal. (previous value: {value})")
             session.pop("conversation_id", None)
 
+###########################
+
+@socketio.on("like")
+def handle_like(data):
+    user_id = session.get("user_id")
+    if not user_id:
+        emit("info_message", {"content": "Please log in to like items."})
+        return
+    
+    item_id = data.get("item_id")
+    item_name = data.get("name")
+    item_description = data.get("description")
+    conversation_id = session.get("conversation_id")
+    
+    print(f"❤️ User {user_id} liked item {item_id} in conversation {conversation_id}")
+    
+@socketio.on("unlike")
+def handle_unlike(data):
+    user_id = session.get("user_id")
+    if not user_id:
+        emit("info_message", {"content": "Please log in to unlike items."})
+        return
+    
+    item_id = data.get("item_id")
+    
+    print(f"💔 User {user_id} unliked item {item_id}")
+
+################
+
 @socketio.on("user_message")
 def handle_user_message(data):
     print(f"🟡 handle_user_message called with data: {data}")
@@ -611,6 +640,9 @@ def handle_user_message(data):
     else:
         emit("bot_reply", {"content": bot_reply})
 
+
+
+
 ### Routes
 
 ### General Pages & Home
@@ -650,6 +682,7 @@ def index():
         messages=[],  # chatbox empty start
         active_conversation_id=None
     )
+
 
 @app.route('/temp', methods=['GET', 'POST'])
 def temp():

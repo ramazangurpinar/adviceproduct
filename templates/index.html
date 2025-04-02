@@ -249,21 +249,19 @@
   button.addEventListener('click', async () => {
     isLiked = !isLiked;
     botIcon.src = isLiked
-      ? "{{ url_for('static', filename='image/heart-full.png') }}" // Cuore pieno
-      : "{{ url_for('static', filename='image/heart.png') }}"; // Cuore vuoto
+      ? "{{ url_for('static', filename='image/heart-full.png') }}"
+      : "{{ url_for('static', filename='image/heart.png') }}";
 
-    try {
-      const response = await fetch('/api/save_message', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sender: "bot", content: item.description })
-      });
-
-      if (!response.ok) throw new Error("Failed to save message");
-
-      console.log("Message saved successfully");
-    } catch (error) {
-      console.error("Error saving message:", error);
+      if (isLiked) {
+        socket.emit('like', {
+            itemId: item.id,
+            name: item.name,
+            description: item.description
+            });
+    } else {
+        socket.emit('unlike', {
+        itemId: item.id
+        });
     }
   });
 

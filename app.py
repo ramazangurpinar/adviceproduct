@@ -527,7 +527,33 @@ def update_conversation_title(conversation_id, new_title):
     mysql.connection.commit()
     cursor.close()
 
+def try_generate_title_if_needed(conversation_id):
+    """
+    If the current title is default (e.g., 'Chat Session', 'Untitled', etc.),
+    and there are enough keywords, generate a new title using AI.
+    """
+    cursor = mysql.connection.cursor()
+    
+    cursor.execute("SELECT title FROM conversations WHERE conversation_id = %s", (conversation_id,))
+    result = cursor.fetchone()
+    
+    if not result:
+        cursor.close()
+        return  # No such conversation
+
+    current_title = result[0].strip().lower()
+    default_titles = {"chat session", "untitled", "new chat after timeout"}
+
+    if current_title in default_titles:
+        generated_title = generate_ai_title_from_keywords(conversation_id)
+        if generated_title:
+            update_conversation_title(conversation_id, generated_title)
+            print("✅ Title generated:", generated_title)
+
+    cursor.close()
+
 ### SocketIO Events
+
 def save_product_suggestions(user_id, conversation_id, message_id, structured_products):
     cursor = mysql.connection.cursor()
 
@@ -591,11 +617,6 @@ def handle_localstorage_sync(data):
             print(f"🧹 conversation_id removed from session due to localStorage removal. (previous value: {value})")
             session.pop("conversation_id", None)
 
-###########################
-
-
-################
-
 @socketio.on("user_message")
 def handle_user_message(data):
     print(f"🟡 handle_user_message called with data: {data}")
@@ -611,21 +632,17 @@ def handle_user_message(data):
     # ✅ If there's no conversation ID in the session, start a new one
     # (localStorage will also sync it to the backend, if present)
     if not conversation_id:
-        print("➕ No conversation found in session. Starting new.")
         conversation_id = start_new_conversation(user_id, title="Chat Session")
 
     else:
         # ⏰ Check if the conversation has expired (e.g., 30 mins of inactivity)
         if is_conversation_expired(conversation_id, minutes=30):
-            print(f"⏰ Conversation expired: {conversation_id}")
             end_conversation(conversation_id)
             conversation_id = start_new_conversation(user_id, title="New Chat After Timeout")
             emit("info_message", {"content": "Your chat session has expired. A new conversation has been started."})
 
     # 🔁 Update session with the valid conversation_id
     session["conversation_id"] = conversation_id
-
-    print(f"✅ Using conversation_id: {conversation_id}")
 
     # 💬 Save user's message to the database
     save_message(conversation_id, 'user', user_text)
@@ -655,6 +672,7 @@ def handle_user_message(data):
     # 🚀 Send bot's reply to frontend in real-time
     if structured:
         save_product_suggestions(user_id, conversation_id, message_id, structured)
+        try_generate_title_if_needed(conversation_id)
         emit("bot_reply", {
             "products": structured,
             "message_id": message_id,
@@ -662,10 +680,12 @@ def handle_user_message(data):
             "user_id": user_id
         })
     else:
-        emit("bot_reply", {"content": bot_reply})
-
-
-
+        emit("bot_reply", {
+            "content": bot_reply,
+            "message_id": message_id,
+            "conversation_id": conversation_id,
+            "user_id": user_id
+        })
 
 ### Routes
 
@@ -707,7 +727,6 @@ def index():
         active_conversation_id=None
     )
 
-
 @app.route('/temp', methods=['GET', 'POST'])
 def temp():
     return render_template('temp.html')
@@ -733,6 +752,7 @@ def view_conversation(conversation_id):
     conn = get_db_connection()
     cursor = conn.cursor()
 
+    # Aktif konuşma bilgisi
     cursor.execute("""
         SELECT title, created_at FROM conversations
         WHERE conversation_id = %s AND user_id = %s
@@ -745,22 +765,47 @@ def view_conversation(conversation_id):
 
     title, created_at = convo_info
 
+    # Mesajları al (message_id ile birlikte!)
     cursor.execute("""
-        SELECT sender_type, content, sent_at
+        SELECT message_id, sender_type, content, sent_at
         FROM messages
         WHERE conversation_id = %s
         ORDER BY sent_at ASC
     """, (conversation_id,))
     raw_messages = cursor.fetchall()
-    messages = [
-        {
-            "sender_type": row[0],
-            "content": row[1],
-            "sent_at": row[2].strftime("%d.%m.%Y %H:%M")
-        }
-        for row in raw_messages
-    ]
 
+    messages = []
+    for row in raw_messages:
+        message_id, sender_type, content, sent_at = row
+        msg_dict = {
+            "message_id": message_id,
+            "sender_type": sender_type,
+            "content": content,
+            "sent_at": sent_at.strftime("%d.%m.%Y %H:%M"),
+        }
+
+        # Eğer bu mesaj bir ürün önerisi ise
+        if "<PRODUCT>" in content and sender_type == "bot":
+            cursor.execute("""
+                SELECT product_name, product_description, liked
+                FROM product_suggestions
+                WHERE conversation_id = %s AND message_id = %s AND user_id = %s
+            """, (conversation_id, message_id, user_id))
+            product_rows = cursor.fetchall()
+
+            products = []
+            for p in product_rows:
+                products.append({
+                    "name": p[0],
+                    "description": p[1],
+                    "liked": bool(p[2])
+                })
+
+            msg_dict["products"] = products
+
+        messages.append(msg_dict)
+
+    # Kullanıcının önceki konuşmaları
     cursor.execute("""
         SELECT conversation_id, title, created_at
         FROM conversations
@@ -778,6 +823,7 @@ def view_conversation(conversation_id):
     ]
 
     conn.close()
+
     return render_template(
         "index.html",
         fullname=session.get("name", "Guest") + " " + session.get("surname", ""),
@@ -852,6 +898,18 @@ def favourites():
     ]
 
     return render_template("favourites.html", products=products)
+
+@app.route("/generate_title/<int:conversation_id>", methods=["POST"])
+def generate_title(conversation_id):
+    user_id = session.get("user_id")
+    if not user_id:
+        return redirect(url_for("login"))
+
+    title = generate_ai_title_from_keywords(conversation_id)
+    update_conversation_title(conversation_id, title)
+
+    return redirect(url_for("view_conversation", conversation_id=conversation_id))
+
 ### Contact / Help
 
 @app.route('/contact', methods=['GET', 'POST'])
@@ -1078,7 +1136,6 @@ def profile():
     user[1] = get_country_name(user[1])
     user[5] = user[5].capitalize() if user[5] else None
     return render_template('profile.html', user=user)
-
 
 @app.route('/edit_profile', methods=['GET', 'POST'])
 def edit_profile():

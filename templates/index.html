@@ -66,6 +66,15 @@
                 {{ active_title }} 
                 </strong>
                 <br>
+                {% set default_titles = ['chat session', 'untitled', 'new chat after timeout'] %}
+                {% if default_titles | select("in", active_title.lower()) | list | length > 0 %}
+                  <form action="{{ url_for('generate_title', conversation_id=active_conversation_id) }}" method="post" class="text-center mt-2">
+                    <button type="submit" class="btn btn-outline-success rounded-pill shadow-sm">
+                      <i class="bi bi-stars"></i> Generate Title
+                    </button>
+                  </form>
+                {% endif %}  
+                <br>             
                 {{ active_created_at }}
                 {% else %}
                 Hi! What product would you like to purchase today?
@@ -73,15 +82,27 @@
                 </p>                
               </div>
               <div id="chat-box" class="flex-grow-1 overflow-auto h-100 d-flex flex-column gap-3 bg-white">
-                {% if messages %}
-                  {% for msg in messages %}
-                    <div class="d-flex flex-column align-self-{{ 'end' if msg.sender_type == 'user' else 'start' }} bg-{{ 'primary-subtle' if msg.sender_type == 'user' else 'light' }} p-2 rounded-3 mb-2 shadow-sm" style="max-width: 60%;">
-                      <strong class="text-{{ 'primary' if msg.sender_type == 'user' else 'success' }}">{{ msg.sender_type|title }}:</strong>
-                      <div>{{ msg.content }}</div>
-                      <div class="text-muted small mt-1 text-end" title="{{ msg.sent_at }}">
-                        {{ msg.sent_at }}
+                    {% for msg in messages %}
+                    <div data-message-id="{{ msg.message_id }}" style="display: none;"></div>
+                
+                    {% if msg.products %}
+                      <script type="application/json" id="products-data-{{ msg.message_id }}">
+                        {{ {
+                          "message_id": msg.message_id,
+                          "conversation_id": active_conversation_id,
+                          "user_id": session.get("user_id"),
+                          "products": msg.products,
+                          "sent_at": msg.sent_at
+                        } | tojson }}
+                      </script>
+                    {% else %}
+                      <!-- Normal user/bot mesajı -->
+                      <div class="d-flex flex-column align-self-{{ 'end' if msg.sender_type == 'user' else 'start' }} bg-{{ 'primary-subtle' if msg.sender_type == 'user' else 'light' }} p-2 rounded-3 mb-2 shadow-sm" style="max-width: 60%;">
+                        <strong class="text-{{ 'primary' if msg.sender_type == 'user' else 'success' }}">{{ msg.sender_type|title }}:</strong>
+                        <div>{{ msg.content }}</div>
+                        <div class="text-muted small mt-1 text-end" title="{{ msg.sent_at }}">{{ msg.sent_at }}</div>
                       </div>
-                    </div>
+                    {% endif %}
                   {% endfor %}
               
                   {# New Chat Button #}
@@ -92,8 +113,9 @@
                     </a>
                   </div>
                   {% endif %}
+                  {% if not messages %}
+                    <p id="noMessagesInfo" class="text-center text-muted"> No messages in this conversation.</p>
                   {% endif %}
-                <p id="noMessagesInfo" class="text-center text-muted"> No messages in this conversation.</p>
               </div>
             </div>
           </div>
@@ -154,12 +176,30 @@
   const noMessagesElement = document.getElementById("noMessagesInfo");   
 
   window.addEventListener("DOMContentLoaded", () => {
-      localStorage.clear();
-      const mainContent = document.querySelector(".main-content");
-      if (mainContent) {
-        mainContent.style.paddingBottom = "60px";
-      }
-            
+    localStorage.clear();
+
+    const mainContent = document.querySelector(".main-content");
+    if (mainContent) {
+      mainContent.style.paddingBottom = "60px";
+    }
+
+    // Ürün mesajlarını render et
+    const jsonScripts = document.querySelectorAll('script[type="application/json"][id^="products-data-"]');
+    jsonScripts.forEach(script => {
+      const data = JSON.parse(script.textContent);
+      const referenceElement = document.querySelector(`[data-message-id="${data.message_id}"]`);
+
+      data.products.forEach(item => {
+        const el = createBotMessage(item, data.message_id, data.conversation_id, data.user_id, data.sent_at);
+        if (referenceElement?.parentNode) {
+          referenceElement.parentNode.insertBefore(el, referenceElement.nextSibling);
+        } else {
+          chatBox.appendChild(el);
+        }
+      });
+
+      script.remove();
+    });
   });
 
   window.addEventListener("beforeunload", function() {
@@ -215,31 +255,46 @@
     scrollToBottom();
   });
 
-  function createBotMessage(item, messageId, conversationId, userId) {
+  function createBotMessage(item, messageId, conversationId, userId, sentAt) {
     const div = document.createElement('div');
     div.className = "d-flex flex-column align-self-start bg-light p-2 rounded-3 mb-2 shadow-sm position-relative";
     div.style.maxWidth = "60%";
 
+    // Bot etiketi
     const botLabel = document.createElement('strong');
     botLabel.className = "text-success";
     botLabel.textContent = 'Bot:';
 
+    // Ürün adı
     const productName = document.createElement('b');
     productName.className = "text-dark";
     productName.textContent = item.name;
 
+    // Ürün açıklaması
     const productDescription = document.createElement('div');
     productDescription.className = "text-body";
     productDescription.textContent = item.description;
 
-    const likeIcon = document.createElement("i");
-    likeIcon.className = "bi bi-heart position-absolute top-0 end-0 m-2 fs-5 text-danger";
-    likeIcon.style.cursor = "pointer";
-    likeIcon.setAttribute("data-liked", "false");
+    // Zaman etiketi
+    const timestamp = document.createElement("div");
+    timestamp.className = "text-muted small mt-1 text-end";
+    timestamp.textContent = sentAt || "";
 
+    // Kalp ikonu (like durumu başlangıçta ayarlanır)
+    const likeIcon = document.createElement("i");
+    const isLiked = item.liked === true;
+
+    likeIcon.className = isLiked
+      ? "bi bi-heart-fill position-absolute top-0 end-0 m-2 fs-5 text-danger"
+      : "bi bi-heart position-absolute top-0 end-0 m-2 fs-5 text-danger";
+
+    likeIcon.style.cursor = "pointer";
+    likeIcon.setAttribute("data-liked", isLiked.toString());
+
+    // Kalp ikonuna tıklama olayı
     likeIcon.addEventListener("click", () => {
-      const isLiked = likeIcon.getAttribute("data-liked") === "true";
-      const newLiked = !isLiked;
+      const currentlyLiked = likeIcon.getAttribute("data-liked") === "true";
+      const newLiked = !currentlyLiked;
 
       likeIcon.className = newLiked
         ? "bi bi-heart-fill position-absolute top-0 end-0 m-2 fs-5 text-danger"
@@ -256,13 +311,17 @@
       });
     });
 
+    // Tüm elemanları sırayla mesaja ekle
     div.appendChild(botLabel);
     div.appendChild(productName);
     div.appendChild(productDescription);
+    div.appendChild(timestamp);
     div.appendChild(likeIcon);
 
     return div;
   }
+
+
 
   function createPlainBotMessage(text) {
     const div = document.createElement('div');
@@ -286,7 +345,10 @@
       if (data.content.includes("has expired")) {
           localStorage.removeItem("conversation_id");
       }
-      chatBox.innerHTML += `<div class="message info"><em>${data.content}</em></div>`;
+
+      const infoElement = createInfoMessage(data.content);
+      chatBox.appendChild(infoElement);
+
       scrollToBottom();
   });
 
@@ -295,6 +357,17 @@
           updateLocalStorage("conversation_id", data.conversation_id);
       }
   });
+
+  function createInfoMessage(content) {
+    const infoDiv = document.createElement("div");
+    infoDiv.className = "message info";
+
+    const em = document.createElement("em");
+    em.textContent = content;
+
+    infoDiv.appendChild(em);
+    return infoDiv;
+  }
 
   function sendMessage() {
       const content = messageInput.value.trim();
@@ -307,16 +380,30 @@
           content: content
       });
 
-      chatBox.innerHTML += `
-                      <div class="d-flex flex-column align-self-end bg-primary-subtle p-2 rounded-3 mb-2 shadow-sm" style="max-width: 60%;">
-                        <strong class="text-primary">You:</strong>
-                        <div>${content}</div>
-                      </div>`;
-
+      const userMessageElement = createUserMessage(content);
+      chatBox.appendChild(userMessageElement);
 
       messageInput.value = '';
       if (endChatForm.classList.contains("d-none")) endChatForm.classList.remove("d-none");
       scrollToBottom();
+  }
+
+  function createUserMessage(content) {
+    const userMessageDiv = document.createElement("div");
+    userMessageDiv.className = "d-flex flex-column align-self-end bg-primary-subtle p-2 rounded-3 mb-2 shadow-sm";
+    userMessageDiv.style.maxWidth = "60%";
+
+    const userLabel = document.createElement("strong");
+    userLabel.className = "text-primary";
+    userLabel.textContent = "You:";
+
+    const userText = document.createElement("div");
+    userText.textContent = content;
+
+    userMessageDiv.appendChild(userLabel);
+    userMessageDiv.appendChild(userText);
+
+    return userMessageDiv;
   }
 
   (function setupEnterHandler() {

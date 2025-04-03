@@ -21,6 +21,8 @@ from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
 from datetime import datetime, timedelta, timezone
 import tiktoken
 from collections import Counter
+from collections import defaultdict
+
 
 ### Configuration and Global Setup
 
@@ -877,27 +879,61 @@ def favourites():
     cursor = mysql.connection.cursor()
 
     cursor.execute("""
-        SELECT ps.product_name, ps.product_description, c.title AS conversation_title, m.sent_at
+        SELECT ps.id, ps.product_name, ps.product_description, c.title AS conversation_title, 
+               m.sent_at, c.conversation_id
         FROM product_suggestions ps
         JOIN conversations c ON ps.conversation_id = c.conversation_id
         JOIN messages m ON ps.message_id = m.message_id
         WHERE ps.user_id = %s AND ps.liked = 1
-        ORDER BY m.sent_at DESC
+        ORDER BY c.title, m.sent_at DESC
     """, (user_id,))
 
     rows = cursor.fetchall()
     cursor.close()
 
-    products = [
-        {
-            "name": row[0],
-            "description": row[1],
-            "conversation_title": row[2],
-            "sent_at": row[3].strftime("%d %B %Y %H:%M")
-        } for row in rows
-    ]
+    grouped_products = defaultdict(lambda: {"title": "", "products": []})
 
-    return render_template("favourites.html", products=products)
+    for row in rows:
+        conversation_id = row[5]
+        grouped_products[conversation_id]["title"] = row[3]  # conversation_title
+        grouped_products[conversation_id]["products"].append({
+            "product_id": row[0],
+            "name": row[1],
+            "description": row[2],
+            "sent_at": row[4].strftime("%d %B %Y %H:%M")
+        })
+
+    return render_template("favourites.html", grouped_products=grouped_products)
+
+@app.route('/product/<int:product_id>')
+def product_detail(product_id):
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    user_id = session['user_id']
+    cursor = mysql.connection.cursor()
+    cursor.execute("""
+        SELECT ps.product_name, ps.product_description, c.title, m.sent_at
+        FROM product_suggestions ps
+        JOIN conversations c ON ps.conversation_id = c.conversation_id
+        JOIN messages m ON ps.message_id = m.message_id
+        WHERE ps.id = %s AND ps.user_id = %s
+    """, (product_id, user_id))
+    row = cursor.fetchone()
+    cursor.close()
+
+    if not row:
+        return "Product not found", 404
+
+    product = {
+        "name": row[0],
+        "description": row[1],
+        "conversation_title": row[2],
+        "sent_at": row[3].strftime("%d %B %Y %H:%M")
+    }
+
+    return render_template("product_detail.html", product=product)
+
 
 @app.route("/generate_title/<int:conversation_id>", methods=["POST"])
 def generate_title(conversation_id):

@@ -1,0 +1,23 @@
+{% extends "master.html" %}
+
+{% block title %}{{ product.name }} - Details{% endblock %}
+
+{% block content %}
+<div class="container my-5">
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <h2 class="card-title">{{ product.name }}</h2>
+            <p class="card-text fs-5 mt-3">{{ product.description }}</p>
+        </div>
+        <div class="card-footer text-muted small">
+            <p class="mb-1"><strong>Conversation:</strong> {{ product.conversation_title }}</p>
+            <p class="mb-0"><strong>Suggested on:</strong> {{ product.sent_at }}</p>
+        </div>
+    </div>
+    <div class="mt-4">
+        <a href="{{ url_for('favourites') }}" class="btn btn-secondary">
+            ← Back to Favourites
+        </a>
+    </div>
+</div>
+{% endblock %}

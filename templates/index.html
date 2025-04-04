@@ -48,7 +48,7 @@
   </div>
 </div>
 
-<body class="d-flex flex-column vh-100"> 
+<div class="d-flex flex-column vh-100"> 
     <div class="flex-grow-1 d-flex flex-column">
       <div class="container-fluid flex-grow-1 d-flex flex-column overflow-hidden pt-2 pb-5">
         <div class="row flex-grow-1 overflow-hidden">
@@ -162,12 +162,11 @@
         </div>
       </div>  
     </div>
-  </body>
-  <script src="https://cdn.socket.io/4.3.2/socket.io.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-  
+  </div>
+  {% endblock %}
+  {% block scripts %}
   <script>
-  const socket = io();
+  const socket = window.socket;
   const chatBox = document.getElementById('chat-box');
   const messageInput = document.getElementById('messageInput');
   const endChatForm = document.getElementById("endChatForm");
@@ -220,20 +219,6 @@
   function scrollToBottom() {
       window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
   }
-
-  socket.on('connect', () => {
-      socket.emit("session_check");
-
-      // Force sync from localStorage to session on reload
-      const storedConvId = localStorage.getItem("conversation_id");
-      if (storedConvId) {
-          socket.emit("localstorage_sync", {
-              key: "conversation_id",
-              value: storedConvId,
-              action: "set"
-          });
-      }
-  });
 
   socket.on('bot_reply', function(data) {
     if (emptyContent) emptyContent.style.display = "none";
@@ -469,5 +454,5 @@
       });
       localStorage.removeItem(key); // 🔸 Then remove the item
   } 
-</script>
-{% endblock %}
+  </script>
+  {% endblock %}

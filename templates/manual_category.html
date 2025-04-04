@@ -1,0 +1,46 @@
+{% extends "master.html" %}
+
+{% block title %}Manually Categorize{% endblock %}
+
+{% block content %}
+<div class="container my-5">
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <h3 class="card-title text-center mb-4">🔧 Categorize - {{ product_name }} </h3>
+            <hr>
+            <form method="POST" class="px-md-4">
+                <div class="mb-3">
+                    <label for="category_id" class="form-label fw-semibold">Select a Category:</label>
+                    <select name="category_id" id="category_id" class="form-select w-100" required>
+                        {% for id, name in categories %}
+                            <option value="{{ id }}" {% if id == selected_id %}selected{% endif %}>{{ name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="d-flex justify-content-between mt-4">
+                    <a href="{{ url_for('product_detail', product_id=product_id) }}" class="btn btn-outline-secondary">
+                        ← Cancel
+                    </a>
+                    <button type="submit" class="btn btn-primary">
+                        💾 Save Category
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+
+<script>
+    $(document).ready(function () {
+        $('#category_id').select2({
+            width: '100%',
+            placeholder: "Select a category",
+            allowClear: true
+        });
+    });
+</script>
+{% endblock %}

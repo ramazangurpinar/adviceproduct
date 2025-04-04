@@ -4,6 +4,8 @@
 
 {% block content %}
 <div class="container my-5">
+    <h2 class="text-center mt-4">🛍️ Product Detail</h2>
+    <br>
     <div class="card shadow-sm">
         <div class="card-body">
             <h2 class="card-title">{{ product.name }}</h2>
@@ -14,10 +16,44 @@
             <p class="mb-0"><strong>Suggested on:</strong> {{ product.sent_at }}</p>
         </div>
     </div>
-    <div class="mt-4">
-        <a href="{{ url_for('favourites') }}" class="btn btn-secondary">
+        <!-- First Row: Navigation Buttons -->
+    <div class="d-flex justify-content-between align-items-center mt-4">
+        <!-- Back Button -->
+        <a href="{{ url_for('favourites') }}" class="btn btn-outline-secondary">
             ← Back to Favourites
         </a>
+
+        <!-- Google Search Button -->
+        <a href="{{ google_url }}" target="_blank" class="btn btn-outline-dark">
+            🔎 Search on Google Shopping
+        </a>
+    </div>
+
+    <!-- Second Row: Categorization Info or Action -->
+    <div class="mt-3">
+        {% if not product.category_id %}
+            <!-- AI Categorization Button -->
+            <form method="POST" action="{{ url_for('assign_category_from_detail', product_id=product_id) }}" class="d-inline">
+                <button type="submit" class="btn btn-success">
+                    🔍 Automatically Categorize with AI
+                </button>
+            </form>
+        {% else %}
+            <!-- Categorized Info Box -->
+            <div class="alert alert-light border-start border-4 border-success d-flex justify-content-between align-items-center shadow-sm">
+                <div>
+                    ✅ Categorized Path: <strong>{{ category_path }}</strong>
+                </div>
+                <form method="POST" action="{{ url_for('assign_category_from_detail', product_id=product_id) }}" class="ms-3">
+                    <button type="submit" class="btn btn-warning btn-sm">
+                        🔁 Reassign with AI
+                    </button>
+                </form>
+                <a href="{{ url_for('manual_category_assign', product_id=product_id) }}" class="btn btn-sm btn-outline-primary">
+                    🔧 Manually Categorize
+                </a>
+            </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}

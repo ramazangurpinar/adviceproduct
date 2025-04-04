@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Category Tree</title>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/jstree.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/themes/default/style.min.css" />
+</head>
+<body>
+  <h2>📂 Category Hierarchy</h2>
+  <div id="category-tree"></div>
+
+  <script>
+    $(function () {
+      $.getJSON("/api/categories/tree", function (data) {
+        function convertToJsTree(data) {
+          return data.map(item => ({
+            id: item.id,
+            text: item.name,
+            children: convertToJsTree(item.children || [])
+          }));
+        }
+
+        const treeData = convertToJsTree(data);
+        $('#category-tree').jstree({
+          core: {
+            data: treeData
+          }
+        });
+      });
+    });
+  </script>
+</body>
+</html>

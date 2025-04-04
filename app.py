@@ -1,4 +1,4 @@
-from flask import Flask, render_template, redirect, url_for, session, request, jsonify
+from flask import Flask, json, render_template, redirect, url_for, session, request, jsonify
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField, IntegerField, SelectField, TextAreaField
 from wtforms.validators import DataRequired, Length, ValidationError, Optional
@@ -152,12 +152,32 @@ def get_db_connection():
         conn = mysql.connect
     return conn
 
-def log_action(log_type: LogType, message, user_id=None):
+def get_log_type_id(log_type: LogType):
     cursor = mysql.connection.cursor()
+    cursor.execute("SELECT log_type_id FROM log_types WHERE log_name = %s", (log_type.value,))
+    log_type_id = cursor.fetchone()
+    
+    cursor.close()
+
+    if log_type_id:
+        return log_type_id[0]
+    else:
+        print(f"Error: Log type {log_type.value} not found in log_types table.")
+        return None
+
+def log_action(log_type: LogType, message, user_id=None):
+    log_type_id = get_log_type_id(log_type)
+    
+    if log_type_id is None:
+        return
+    
+    cursor = mysql.connection.cursor()
+
     cursor.execute("""
-        INSERT INTO app_logs (user_id, log_type, message)
+        INSERT INTO app_logs (user_id, log_type_id, message)
         VALUES (%s, %s, %s)
-    """, (user_id, log_type.value, message))
+    """, (user_id, log_type_id, message))
+
     mysql.connection.commit()
     cursor.close()
 
@@ -241,7 +261,7 @@ def extract_keywords(text, top_n=5):
     return top_keywords
 
 def remove_thinking_tags(input_string):
-    cleaned_string = re.sub(r'<think>.*?</think>', '', input_string, flags=re.DOTALL)
+    cleaned_string = re.sub(r'<think>.*?</think>', '', input_string, flags=re.DOTALL).strip()
     return cleaned_string
 
 def separate_numbered_suggestions(text):
@@ -318,7 +338,11 @@ def ask_deepseek(user_message, user_context=None, conversation_history=None):
         return bot_reply, structured
 
     except Exception as e:
-        print(f"❌ DeepSeek error: {str(e)}")
+        log_action(
+            LogType.AI_RESPONSE_FAILED,
+            f"AI response failed in conversation {session.get('conversation_id')}: {str(e)}",
+            user_id=session.get("user_id")
+        )        
         return "Sorry, I couldn't generate a response.", conversation_history
 
 def get_user_context(user_id, conversation_id=None):
@@ -361,6 +385,11 @@ def start_new_conversation(user_id, title="Untitled"):
     cursor.close()
     session['conversation_id'] = conversation_id
     emit("conversation_initialized", {"conversation_id": conversation_id})
+    log_action(
+        LogType.CONVERSATION_STARTED,
+        f"Conversation started with ID: {conversation_id}",
+        user_id=user_id
+    )
     return conversation_id
 
 def update_conversation_keywords(conversation_id, new_keywords):
@@ -412,6 +441,7 @@ def end_conversation(conversation_id):
     """, (conversation_id,))
     mysql.connection.commit()
     cursor.close()
+    log_action(LogType.CONVERSATION_ENDED, f"Conversation {conversation_id} auto-ended (timeout)", user_id=session.get("user_id"))
     session.pop('conversation_id', None)
 
 def save_message(conversation_id, sender_type, content):
@@ -550,6 +580,11 @@ def try_generate_title_if_needed(conversation_id):
         generated_title = generate_ai_title_from_keywords(conversation_id)
         if generated_title:
             update_conversation_title(conversation_id, generated_title)
+            log_action(
+                LogType.AI_TITLE_GENERATED,
+                f"AI generated a title for conversation {conversation_id}: {generated_title}",
+                user_id=session.get("user_id")
+            )
             print("✅ Title generated:", generated_title)
 
     cursor.close()
@@ -574,6 +609,11 @@ def save_product_suggestions(user_id, conversation_id, message_id, structured_pr
         ))
 
     mysql.connection.commit()
+    log_action(
+        LogType.PRODUCT_SUGGESTION_SAVED,
+        f"{len(structured_products)} product(s) saved for conversation {conversation_id}.",
+        user_id=user_id
+    )
     cursor.close()
 
 @socketio.on("toggle_like")
@@ -594,6 +634,11 @@ def handle_toggle_like(data):
     mysql.connection.commit()
     cursor.close()
 
+    if liked:
+        log_action(LogType.PRODUCT_LIKED, f"User {user_id} liked product: {product_name}", user_id=user_id)
+    else:
+        log_action(LogType.PRODUCT_UNLIKED, f"User {user_id} unliked product: {product_name}", user_id=user_id)
+
 @socketio.on("session_check")
 def handle_session_check():
     print("✅ WebSocket connection built.")
@@ -609,7 +654,6 @@ def handle_localstorage_sync(data):
     user_id = session.get("user_id")
 
     print(f"🛰️ localStorage sync from user_id {user_id} — {action.upper()} → {key} = {value}")
-    log_action(LogType.LOCALSTORAGE_SYNC, f"User {user_id} synced localStorage: {key} = {value}", user_id=user_id)
 
     if key == "conversation_id":
         if action == "set":
@@ -640,6 +684,11 @@ def handle_user_message(data):
         # ⏰ Check if the conversation has expired (e.g., 30 mins of inactivity)
         if is_conversation_expired(conversation_id, minutes=30):
             end_conversation(conversation_id)
+            log_action(
+                LogType.CONVERSATION_TIMEOUT,
+                f"Conversation {conversation_id} expired and was ended due to inactivity.",
+                user_id=user_id
+            )            
             conversation_id = start_new_conversation(user_id, title="New Chat After Timeout")
             emit("info_message", {"content": "Your chat session has expired. A new conversation has been started."})
 
@@ -652,7 +701,11 @@ def handle_user_message(data):
     # 🗝️ Extract and update conversation keywords
     new_keywords = extract_keywords(user_text)
     update_conversation_keywords(conversation_id, new_keywords)
-
+    log_action(
+        LogType.AI_KEYWORDS_EXTRACTED,
+        f"Keywords extracted from message in conversation {conversation_id}: {', '.join(new_keywords)}",
+        user_id=user_id
+    )
     # ⏱️ Update last activity timestamp for session timeout tracking
     update_last_activity(conversation_id)
 
@@ -670,6 +723,12 @@ def handle_user_message(data):
     cursor.execute("SELECT LAST_INSERT_ID()")
     message_id = cursor.fetchone()[0]
     cursor.close()    
+
+    log_action(
+        LogType.AI_REPLY_GENERATED,
+        f"AI generated a reply in conversation {conversation_id}. Message ID: {message_id}",
+        user_id=user_id
+    )
 
     # 🚀 Send bot's reply to frontend in real-time
     if structured:
@@ -745,6 +804,13 @@ def testdb():
     
 ### Chat & Conversation Management
 
+def get_google_shopping_url(product_name, category_name=None):
+    query = product_name
+    if category_name:
+        query += f" {category_name}"
+    query = query.replace(" ", "+")
+    return f"https://www.google.com/search?tbm=shop&q={query}"
+
 @app.route('/conversation/<int:conversation_id>')
 def view_conversation(conversation_id):
     user_id = session.get("user_id")
@@ -767,6 +833,11 @@ def view_conversation(conversation_id):
 
     title, created_at = convo_info
 
+    log_action(
+        LogType.CONVERSATION_RESTORED,
+        f"Conversation {conversation_id} restored by user.",
+        user_id=user_id
+    )
     # Mesajları al (message_id ile birlikte!)
     cursor.execute("""
         SELECT message_id, sender_type, content, sent_at
@@ -860,7 +931,11 @@ def end_chat():
     try:
         update_conversation_status(conversation_id, 0)
         save_message(conversation_id, 'bot', 'Conversation ended.')
-
+        log_action(
+            LogType.CONVERSATION_ENDED,
+            f"Conversation ended with ID: {conversation_id}",
+            user_id=session.get("user_id")
+        )
         final_title = generate_ai_title_from_keywords(conversation_id)
         print("Generated Title:", final_title)
         update_conversation_title(conversation_id, final_title)        
@@ -905,6 +980,21 @@ def favourites():
 
     return render_template("favourites.html", grouped_products=grouped_products)
 
+def get_category_path_by_id(category_id):
+    path = []
+    cursor = mysql.connection.cursor()
+    while category_id:
+        cursor.execute("SELECT name, parent_id FROM categories WHERE id = %s", (category_id,))
+        result = cursor.fetchone()
+        if result:
+            name, parent_id = result
+            path.insert(0, name)
+            category_id = parent_id
+        else:
+            break
+    cursor.close()
+    return " > ".join(path) if path else None
+
 @app.route('/product/<int:product_id>')
 def product_detail(product_id):
     if 'user_id' not in session:
@@ -913,10 +1003,12 @@ def product_detail(product_id):
     user_id = session['user_id']
     cursor = mysql.connection.cursor()
     cursor.execute("""
-        SELECT ps.product_name, ps.product_description, c.title, m.sent_at
+        SELECT ps.product_name, ps.product_description, c.title, m.sent_at, 
+               ps.category_id, cat.name AS category_name
         FROM product_suggestions ps
         JOIN conversations c ON ps.conversation_id = c.conversation_id
         JOIN messages m ON ps.message_id = m.message_id
+        LEFT JOIN categories cat ON ps.category_id = cat.id
         WHERE ps.id = %s AND ps.user_id = %s
     """, (product_id, user_id))
     row = cursor.fetchone()
@@ -929,11 +1021,19 @@ def product_detail(product_id):
         "name": row[0],
         "description": row[1],
         "conversation_title": row[2],
-        "sent_at": row[3].strftime("%d %B %Y %H:%M")
+        "sent_at": row[3].strftime("%d %B %Y %H:%M"),
+        "category_id": row[4],
+        "category_name": row[5]
     }
 
-    return render_template("product_detail.html", product=product)
-
+    log_action(
+        LogType.PRODUCT_VIEWED,
+        f"User viewed product: {product['name']}",
+        user_id=user_id
+    )
+    google_url = get_google_shopping_url(product["name"], product.get("category_name"))
+    category_path = get_category_path_by_id(product["category_id"]) if product["category_id"] else None
+    return render_template("product_detail.html", product=product, product_id=product_id, google_url=google_url,category_path=category_path)
 
 @app.route("/generate_title/<int:conversation_id>", methods=["POST"])
 def generate_title(conversation_id):
@@ -943,7 +1043,11 @@ def generate_title(conversation_id):
 
     title = generate_ai_title_from_keywords(conversation_id)
     update_conversation_title(conversation_id, title)
-
+    log_action(
+        LogType.CONVERSATION_TITLE_EDITED,
+        f"Title updated for conversation {conversation_id}: {title}",
+        user_id=user_id
+    )
     return redirect(url_for("view_conversation", conversation_id=conversation_id))
 
 ### Contact / Help
@@ -1321,6 +1425,263 @@ def delete_profile():
     # Redirect the user to the login page after deletion
     return redirect(url_for('login'))
 
+### Category Management
+
+@app.route("/api/categories/tree")
+def get_category_tree():
+    cursor = mysql.connection.cursor()
+    cursor.execute("SELECT id, name, parent_id FROM categories")
+    rows = cursor.fetchall()
+    cursor.close()
+
+    categories = [{"id": r[0], "name": r[1], "parent_id": r[2]} for r in rows]
+
+    # id -> category map
+    category_map = {cat["id"]: {**cat, "children": []} for cat in categories}
+    root_categories = []
+
+    for cat in categories:
+        if cat["parent_id"] is None:
+            root_categories.append(category_map[cat["id"]])
+        else:
+            parent = category_map.get(cat["parent_id"])
+            if parent:
+                parent["children"].append(category_map[cat["id"]])
+
+    return jsonify(root_categories)
+
+def resolve_category_id_from_path(path):
+    print(f"🔍 Resolving category ID from path: {path}")
+    if not path:
+        print("⚠️ No path provided.")
+        return None
+
+    parts = [p.strip() for p in path.split(">")]
+    cursor = mysql.connection.cursor()
+    current_parent_id = None
+
+    for part in parts:
+        print(f"➡️ Searching for category: {part} (parent_id={current_parent_id})")
+        cursor.execute("""
+            SELECT id FROM categories
+            WHERE name = %s AND (parent_id = %s OR (%s IS NULL AND parent_id IS NULL))
+        """, (part, current_parent_id, current_parent_id))
+        result = cursor.fetchone()
+        if result:
+            current_parent_id = result[0]
+            print(f"✔️ Found category ID: {current_parent_id}")
+        else:
+            print(f"❌ Category not found for: {part}")
+            cursor.close()
+            return None
+
+    cursor.close()
+    print(f"🏁 Final category ID: {current_parent_id}")
+    return current_parent_id
+
+def get_deep_category_path(product_name, product_description):
+    print("🚀 Starting step-by-step category path resolution")
+
+    cursor = mysql.connection.cursor()
+    cursor.execute("SELECT id, name FROM categories WHERE parent_id IS NULL")
+    level_categories = cursor.fetchall()
+
+    path = []
+    parent_id = None
+
+    while level_categories:
+        print(f"🔎 Searching among {len(level_categories)} categories at level {len(path) + 1}")
+
+        options = [name for _, name in level_categories]
+
+        system_prompt = f"""
+        You are a product categorization assistant.
+
+        Given a product name and description, and a list of category options at a specific level,
+        choose the most appropriate category.
+
+        Product Name: {product_name}
+        Description: {product_description}
+
+        Categories:
+        {json.dumps(options, indent=2)}
+
+        ❗Only return ONE category name from the list above that best fits. Do NOT explain.
+        """
+
+        try:
+            response = deepseek_chat([
+                SystemMessage(content=system_prompt),
+                HumanMessage(content="Select the best fitting category from the list.")
+            ])
+            cleaned_category = remove_thinking_tags(response.content)
+            chosen_category = cleaned_category.strip()
+            print(f"✅ AI selected: {repr(chosen_category)}")
+            
+        except Exception as e:
+            print("❌ Error during AI selection:", e)
+            break
+
+        # Fetch selected category ID
+        cursor.execute("""
+            SELECT id FROM categories
+            WHERE name = %s AND (parent_id = %s OR (%s IS NULL AND parent_id IS NULL))
+        """, (chosen_category, parent_id, parent_id))
+        result = cursor.fetchone()
+        if not result:
+            print(f"❌ Category '{chosen_category}' not found in DB.")
+            break
+
+        category_id = result[0]
+        path.append(chosen_category)
+        parent_id = category_id
+
+        # Fetch children for next loop
+        cursor.execute("SELECT id, name FROM categories WHERE parent_id = %s", (parent_id,))
+        level_categories = cursor.fetchall()
+
+    cursor.close()
+
+    if path:
+        full_path = " > ".join(path)
+        print(f"🏁 Final path: {full_path}")
+        return full_path
+    else:
+        print("⚠️ No category path could be determined.")
+        return None
+
+@app.route('/assign-category/<int:product_id>', methods=['POST'])
+def assign_category_from_detail(product_id):
+    print(f"🧾 Assigning category from detail page for product {product_id}")
+
+    if 'user_id' not in session:
+        print("⛔ Unauthorized access attempt.")
+        return redirect(url_for('login'))
+
+    cursor = mysql.connection.cursor()
+    cursor.execute("""
+        SELECT product_name, product_description
+        FROM product_suggestions
+        WHERE id = %s AND user_id = %s
+    """, (product_id, session["user_id"]))
+    row = cursor.fetchone()
+    cursor.close()
+
+    if not row:
+        print("❌ Product not found in DB.")
+        return "Product not found", 404
+
+    product_name, product_description = row
+    print(f"📦 Product: {product_name}")
+
+    # 🧠 Step-by-step AI prediction
+    path = get_deep_category_path(product_name, product_description)
+    print("📌 Predicted Path:", path)
+
+    # 🆔 Resolve the final category ID
+    category_id = resolve_category_id_from_path(path)
+
+    if category_id:
+        print(f"💾 Updating product_suggestions with category_id={category_id}")
+        cursor = mysql.connection.cursor()
+        cursor.execute("""
+            UPDATE product_suggestions SET category_id = %s WHERE id = %s
+        """, (category_id, product_id))
+        mysql.connection.commit()
+        cursor.close()
+
+        log_action(
+            LogType.CATEGORY_PREDICTED,
+            f"Manually assigned category {category_id} to product '{product_name}' via product detail page.",
+            user_id=session.get("user_id")
+        )
+        print("✅ Category assignment successful.")
+
+    return redirect(url_for("product_detail", product_id=product_id))
+
+@app.route("/categories")
+def show_categories():
+    return render_template("category_tree.html")
+
+def get_category_full_path(cat_id, cursor, cache={}):
+    if cat_id in cache:
+        return cache[cat_id]
+    
+    cursor.execute("SELECT name, parent_id FROM categories WHERE id = %s", (cat_id,))
+    row = cursor.fetchone()
+    if not row:
+        return ""
+
+    name, parent_id = row
+    if parent_id:
+        parent_path = get_category_full_path(parent_id, cursor, cache)
+        full_path = f"{parent_path} > {name}"
+    else:
+        full_path = name
+
+    cache[cat_id] = full_path
+    return full_path
+
+
+@app.route('/product/<int:product_id>/manual-category', methods=['GET', 'POST'])
+def manual_category_assign(product_id):
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    cursor = mysql.connection.cursor()
+
+    # Fetch the product name and current category_id
+    cursor.execute("""
+        SELECT product_name, category_id FROM product_suggestions
+        WHERE id = %s AND user_id = %s
+    """, (product_id, session['user_id']))
+    row = cursor.fetchone()
+
+    if not row:
+        cursor.close()
+        return "Product not found or unauthorized", 404
+
+    product_name = row[0]
+    current_category_id = row[1]
+
+    # Retrieve all category IDs
+    cursor.execute("SELECT id FROM categories")
+    category_ids = [r[0] for r in cursor.fetchall()]
+
+    # Build full path for each category ID
+    categories = []
+    for cat_id in category_ids:
+        path = get_category_full_path(cat_id, cursor)
+        categories.append((cat_id, path))
+
+    # Sort categories alphabetically by path
+    categories.sort(key=lambda x: x[1])
+
+    # If form is submitted
+    if request.method == 'POST':
+        selected_id = request.form.get('category_id')
+        if selected_id:
+            cursor.execute("""
+                UPDATE product_suggestions
+                SET category_id = %s
+                WHERE id = %s
+            """, (selected_id, product_id))
+            mysql.connection.commit()
+            cursor.close()
+            return redirect(url_for('product_detail', product_id=product_id))
+
+    cursor.close()
+
+    # Render the manual category assignment page
+    return render_template(
+        "manual_category.html",
+        product_id=product_id,
+        product_name=product_name,
+        categories=categories,
+        selected_id=current_category_id
+    )
+
+
 ### Password Reset
 
 @app.route('/forgot-password', methods=['GET', 'POST'])
@@ -1342,23 +1703,31 @@ def forgot_password():
                 message = "Google users cannot reset password. Please use Google Sign-In to log in."
                 return render_template('forgot_password.html', form=form, message=message)
 
-            token = s.dumps(email, salt='email-reset')
-            reset_url = url_for('reset_password', token=token, _external=True)
-            send_email_from_template("RESETPASSWORD", email, {"reset_url": reset_url})
-            log_action(LogType.PASSWORD_RESET_LINK_SENT, f"Password reset link sent to: {email}", user_id=user_id)
-            message = "A password reset link has been sent to your email."
+            try:
+                token = s.dumps(email, salt='email-reset')
+                reset_url = url_for('reset_password', token=token, _external=True)
+                send_email_from_template("RESETPASSWORD", email, {"reset_url": reset_url})
+                log_action(LogType.PASSWORD_RESET_LINK_SENT, f"Password reset link sent to: {email}", user_id=user_id)
+                message = "A password reset link has been sent to your email."
+            except Exception as e:
+                log_action(LogType.PASSWORD_RESET_FAILED, f"Password reset failed for email: {email}. Error: {str(e)}", user_id=user_id)
+                message = "An error occurred while sending the password reset link. Please try again later."
+
         else:
             message = "If this email is registered, a reset link has been sent."
 
     return render_template('forgot_password.html', form=form, message=message)
+
 
 @app.route('/reset-password/<token>', methods=['GET', 'POST'])
 def reset_password(token):
     try:
         email = s.loads(token, salt='email-reset', max_age=3600)  # 1 hour
     except SignatureExpired:
+        log_action(LogType.TOKEN_INVALID, "Password reset token expired.")
         return "The reset link has expired.", 403
     except BadSignature:
+        log_action(LogType.TOKEN_INVALID, "Invalid or tampered password reset token.")
         return "Invalid or tampered link.", 403
 
     # Check if the user is a Google account user

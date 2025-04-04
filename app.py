@@ -33,10 +33,11 @@ load_dotenv()
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 app.secret_key = os.getenv('SECRET_KEY', 'fallback-secret-key')
-app.config['MYSQL_HOST'] = 'localhost'  # host address of the database
-app.config['MYSQL_USER'] = 'root'  # username of the database
+app.config['MYSQL_HOST'] = os.getenv("MYSQL_HOST")  # host address of the database
+app.config['MYSQL_PORT'] = os.getenv("MYSQL_PORT")  # host address of the database
+app.config['MYSQL_USER'] =  os.getenv("MYSQL_USER")  # username of the database
 app.config['MYSQL_PASSWORD'] = os.getenv("MYSQL_PASSWORD")  # password of the database
-app.config['MYSQL_DB'] = 'productadvice'  # database name
+app.config['MYSQL_DB'] = os.getenv("MYSQL_DB")   # database name
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)  # session timeout
 MAX_TOKENS = 6000
 

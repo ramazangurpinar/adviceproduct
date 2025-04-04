@@ -954,28 +954,41 @@ def favourites():
     cursor = mysql.connection.cursor()
 
     cursor.execute("""
-        SELECT ps.id, ps.product_name, ps.product_description, c.title AS conversation_title, 
+        SELECT ps.id, ps.product_name, ps.product_description, 
+               c.title AS conversation_title, c.created_at,
                m.sent_at, c.conversation_id
         FROM product_suggestions ps
         JOIN conversations c ON ps.conversation_id = c.conversation_id
         JOIN messages m ON ps.message_id = m.message_id
         WHERE ps.user_id = %s AND ps.liked = 1
-        ORDER BY c.title, m.sent_at DESC
+        ORDER BY c.created_at DESC, m.sent_at DESC
     """, (user_id,))
 
     rows = cursor.fetchall()
     cursor.close()
 
-    grouped_products = defaultdict(lambda: {"title": "", "products": []})
+    grouped_products = defaultdict(lambda: {
+        "title": "",
+        "created_at": "",
+        "products": []
+    })
 
     for row in rows:
-        conversation_id = row[5]
-        grouped_products[conversation_id]["title"] = row[3]  # conversation_title
+        product_id = row[0]
+        product_name = row[1]
+        product_description = row[2]
+        conversation_title = row[3]
+        conversation_created_at = row[4].strftime("%d %B %Y %H:%M")
+        message_sent_at = row[5].strftime("%d %B %Y %H:%M")
+        conversation_id = row[6]
+
+        grouped_products[conversation_id]["title"] = conversation_title
+        grouped_products[conversation_id]["created_at"] = conversation_created_at
         grouped_products[conversation_id]["products"].append({
-            "product_id": row[0],
-            "name": row[1],
-            "description": row[2],
-            "sent_at": row[4].strftime("%d %B %Y %H:%M")
+            "product_id": product_id,
+            "name": product_name,
+            "description": product_description,
+            "sent_at": message_sent_at
         })
 
     return render_template("favourites.html", grouped_products=grouped_products)
@@ -1592,10 +1605,16 @@ def assign_category_from_detail(product_id):
 
         log_action(
             LogType.CATEGORY_PREDICTED,
-            f"Manually assigned category {category_id} to product '{product_name}' via product detail page.",
+            f"Auto-assigned category {category_id} to product '{product_name}' via product detail page.",
             user_id=session.get("user_id")
         )
         print("✅ Category assignment successful.")
+    else:
+        log_action(
+            LogType.CATEGORY_ASSIGNMENT_FAILED,
+            f"Failed to assign category to product '{product_name}' (ID: {product_id}). Path: {path}",
+            user_id=session.get("user_id")
+        )
 
     return redirect(url_for("product_detail", product_id=product_id))
 
@@ -1667,6 +1686,11 @@ def manual_category_assign(product_id):
                 WHERE id = %s
             """, (selected_id, product_id))
             mysql.connection.commit()
+            log_action(
+                LogType.PRODUCT_CATEGORY_ASSIGNED_MANUAL,
+                f"Manually assigned category {selected_id} to product ID {product_id}.",
+                user_id=session.get("user_id")
+            )            
             cursor.close()
             return redirect(url_for('product_detail', product_id=product_id))
 

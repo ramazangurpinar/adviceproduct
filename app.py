@@ -32,9 +32,10 @@ load_dotenv()
 
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 app.secret_key = os.getenv('SECRET_KEY', 'fallback-secret-key')
 app.config['MYSQL_HOST'] = os.getenv("MYSQL_HOST")  # host address of the database
-app.config['MYSQL_PORT'] = os.getenv("MYSQL_PORT")  # host address of the database
+app.config['MYSQL_PORT'] = int(os.getenv("MYSQL_PORT"))  # host address of the database
 app.config['MYSQL_USER'] =  os.getenv("MYSQL_USER")  # username of the database
 app.config['MYSQL_PASSWORD'] = os.getenv("MYSQL_PASSWORD")  # password of the database
 app.config['MYSQL_DB'] = os.getenv("MYSQL_DB")   # database name

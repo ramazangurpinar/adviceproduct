@@ -1180,6 +1180,8 @@ def login():
 
 @app.route('/login/google', methods=['POST'])
 def google_login():
+    print("🔵 /login/google endpoint called")
+
     try:
         token = request.json.get('token')
 
@@ -1188,32 +1190,39 @@ def google_login():
             google_requests.Request(),
             GOOGLE_CLIENT_ID
         )
+        print("✅ Google ID token verified")
 
-        # Get user information
         email = id_info.get('email')
         first_name = id_info.get('given_name', '')
         last_name = id_info.get('family_name', '')
 
-        # If Google has not sent family_name or given_name, split from name
+        print("📧 Email:", email)
+        print("👤 First Name:", first_name, " | Last Name:", last_name)
+
         if not first_name or not last_name:
             full_name = id_info.get('name', '')
             name_parts = full_name.split(' ', 1)
             first_name = first_name or name_parts[0]
             last_name = last_name or (name_parts[1] if len(name_parts) > 1 else '')
+            print("🔁 Fallback name parts used")
 
-        # user exist in database?
-        cursor = get_db_connection().cursor()
+        # Use a consistent connection object
+        conn = mysql.connection
+        cursor = conn.cursor()
+
+        # Check if user exists
         cursor.execute("SELECT id, username, name, surname FROM users WHERE email = %s", (email,))
         existing_user = cursor.fetchone()
+        print("🔍 Existing user:", existing_user)
 
         if existing_user:
-            # create session for existing user
+            print("✅ User exists. Creating session...")
             session['user_id'] = existing_user[0]
             session['username'] = existing_user[1]
             session['name'] = existing_user[2]
             session['surname'] = existing_user[3]
         else:
-            # create a new username
+            print("🆕 New user. Creating username...")
             base_username = email.split('@')[0]
             username = base_username
             counter = 1
@@ -1225,17 +1234,31 @@ def google_login():
                 username = f"{base_username}{counter}"
                 counter += 1
 
+            print("✅ Username finalized:", username)
+
             cursor.execute("""
                 INSERT INTO users (name, surname, username, email, country, age, gender)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
             """, (first_name, last_name, username, email, None, None, None))
 
-            mysql.connection.commit()
+            print("📝 Insert executed. rowcount:", cursor.rowcount)
 
-            send_email_from_template("GOOGLE_LOGIN", email, {"username": username})
+            conn.commit()
+            print("💾 Commit complete.")
+
+            try:
+                send_email_from_template("GOOGLE_LOGIN", email, {"username": username})
+                print("📧 Welcome email sent")
+            except Exception as e:
+                print("⚠️ Email send error:", e)
 
             cursor.execute("SELECT id FROM users WHERE email = %s", (email,))
             new_user = cursor.fetchone()
+            print("🆔 New user ID fetched:", new_user)
+
+            if not new_user:
+                print("❌ User insert failed!")
+                return jsonify({'error': 'User insert failed'}), 500
 
             session['user_id'] = new_user[0]
             session['username'] = username
@@ -1252,12 +1275,15 @@ def google_login():
         )
 
         cursor.close()
+        print("✅ Google login completed successfully")
         return jsonify({'redirect': url_for('index')})
 
     except ValueError:
+        print("❌ Invalid Google ID token")
         return jsonify({'error': 'Invalid Google ID token'}), 400
+
     except Exception as e:
-        print(f"Google OAuth Error: {str(e)}")
+        print(f"❌ Google OAuth Error: {str(e)}")
         return jsonify({'error': 'Authentication failed'}), 500
 
 @app.route('/logout')

@@ -23,7 +23,6 @@ import tiktoken
 from collections import Counter
 from collections import defaultdict
 
-
 ### Configuration and Global Setup
 
 app = Flask(__name__)
@@ -52,7 +51,7 @@ deepseek_chat = ChatGroq(
 # Token serializer
 s = URLSafeTimedSerializer(app.secret_key)
 
-### Validators
+### A.Validators
 
 def username_exists(form, field):
     cursor = mysql.connection.cursor()
@@ -72,7 +71,7 @@ def email_exists(form, field):
     if existing_email:
         raise ValidationError('This email is already taken.')
 
-### Forms
+### B.Forms
 class RegistrationForm(FlaskForm):
     name = StringField('Name', validators=[DataRequired(), Length(min=2, max=50)])
     surname = StringField('Surname', validators=[DataRequired(), Length(min=2, max=50)])
@@ -121,7 +120,7 @@ class ContactForm(FlaskForm):
     message = TextAreaField('Message', validators=[DataRequired(), Length(min=10, max=1000)])
     submit = SubmitField('Send')
 
-### Utility Functions
+### C.Utility Functions
 
 def count_tokens(text):
     try:
@@ -153,6 +152,15 @@ def get_db_connection():
     except Exception:
         conn = mysql.connect
     return conn
+
+def get_google_shopping_url(product_name, category_name=None):
+    query = product_name
+    if category_name:
+        query += f" {category_name}"
+    query = query.replace(" ", "+")
+    return f"https://www.google.com/search?tbm=shop&q={query}"
+
+### D.Logging & Tracking
 
 def get_log_type_id(log_type: LogType):
     cursor = mysql.connection.cursor()
@@ -192,7 +200,7 @@ def log_email(template_name, recipient_email, subject, body, status="SUCCESS", e
     mysql.connection.commit()
     cursor.close()
 
-### E-mail Handling
+### E.E-mail Handling
 
 def get_email_template(template_name):
     cursor = mysql.connection.cursor()
@@ -243,7 +251,7 @@ def send_reset_email(to_email, token):
 def send_password_changed_email(username, to_email):
     return send_email_from_template("PASSWORDCHANGED", to_email, {"username": username})
 
-### Chat Logic
+### F.AI & Chat Logic
 
 def extract_keywords(text, top_n=5):
     print(f"Extracting keywords from text: {text}")
@@ -374,7 +382,7 @@ def get_user_context(user_id, conversation_id=None):
     cursor.close()
     return context
 
-### Conversation Management
+### G.Conversation Management
 
 def start_new_conversation(user_id, title="Untitled"):
     cursor = mysql.connection.cursor()
@@ -489,6 +497,8 @@ def update_conversation_status(conversation_id, status):
     cursor.close()
     connection.close()
 
+### H.AI Title & Keywords Handling
+
 def extract_title_from_llm_output(cleaned_text):
     match = re.search(r"<TITLE>(.*?)</TITLE>", cleaned_text, re.IGNORECASE | re.DOTALL)
     if match:
@@ -591,9 +601,10 @@ def try_generate_title_if_needed(conversation_id):
 
     cursor.close()
 
-### SocketIO Events
+### I.Product Suggestions & Likes
 
 def save_product_suggestions(user_id, conversation_id, message_id, structured_products):
+
     cursor = mysql.connection.cursor()
 
     for product in structured_products:
@@ -640,6 +651,8 @@ def handle_toggle_like(data):
         log_action(LogType.PRODUCT_LIKED, f"User {user_id} liked product: {product_name}", user_id=user_id)
     else:
         log_action(LogType.PRODUCT_UNLIKED, f"User {user_id} unliked product: {product_name}", user_id=user_id)
+
+### J.SocketIO Events
 
 @socketio.on("session_check")
 def handle_session_check():
@@ -750,9 +763,145 @@ def handle_user_message(data):
             "user_id": user_id
         })
 
-### Routes
+### K.Category Matching & Resolution
 
-### General Pages & Home
+def resolve_category_id_from_path(path):
+    print(f"🔍 Resolving category ID from path: {path}")
+    if not path:
+        print("⚠️ No path provided.")
+        return None
+
+    parts = [p.strip() for p in path.split(">")]
+    cursor = mysql.connection.cursor()
+    current_parent_id = None
+
+    for part in parts:
+        print(f"➡️ Searching for category: {part} (parent_id={current_parent_id})")
+        cursor.execute("""
+            SELECT id FROM categories
+            WHERE name = %s AND (parent_id = %s OR (%s IS NULL AND parent_id IS NULL))
+        """, (part, current_parent_id, current_parent_id))
+        result = cursor.fetchone()
+        if result:
+            current_parent_id = result[0]
+            print(f"✔️ Found category ID: {current_parent_id}")
+        else:
+            print(f"❌ Category not found for: {part}")
+            cursor.close()
+            return None
+
+    cursor.close()
+    print(f"🏁 Final category ID: {current_parent_id}")
+    return current_parent_id
+
+def get_deep_category_path(product_name, product_description):
+    print("🚀 Starting step-by-step category path resolution")
+
+    cursor = mysql.connection.cursor()
+    cursor.execute("SELECT id, name FROM categories WHERE parent_id IS NULL")
+    level_categories = cursor.fetchall()
+
+    path = []
+    parent_id = None
+
+    while level_categories:
+        print(f"🔎 Searching among {len(level_categories)} categories at level {len(path) + 1}")
+
+        options = [name for _, name in level_categories]
+
+        system_prompt = f"""
+        You are a product categorization assistant.
+
+        Given a product name and description, and a list of category options at a specific level,
+        choose the most appropriate category.
+
+        Product Name: {product_name}
+        Description: {product_description}
+
+        Categories:
+        {json.dumps(options, indent=2)}
+
+        ❗Only return ONE category name from the list above that best fits. Do NOT explain.
+        """
+
+        try:
+            response = deepseek_chat([
+                SystemMessage(content=system_prompt),
+                HumanMessage(content="Select the best fitting category from the list.")
+            ])
+            cleaned_category = remove_thinking_tags(response.content)
+            chosen_category = cleaned_category.strip()
+            print(f"✅ AI selected: {repr(chosen_category)}")
+            
+        except Exception as e:
+            print("❌ Error during AI selection:", e)
+            break
+
+        # Fetch selected category ID
+        cursor.execute("""
+            SELECT id FROM categories
+            WHERE name = %s AND (parent_id = %s OR (%s IS NULL AND parent_id IS NULL))
+        """, (chosen_category, parent_id, parent_id))
+        result = cursor.fetchone()
+        if not result:
+            print(f"❌ Category '{chosen_category}' not found in DB.")
+            break
+
+        category_id = result[0]
+        path.append(chosen_category)
+        parent_id = category_id
+
+        # Fetch children for next loop
+        cursor.execute("SELECT id, name FROM categories WHERE parent_id = %s", (parent_id,))
+        level_categories = cursor.fetchall()
+
+    cursor.close()
+
+    if path:
+        full_path = " > ".join(path)
+        print(f"🏁 Final path: {full_path}")
+        return full_path
+    else:
+        print("⚠️ No category path could be determined.")
+        return None
+
+def get_category_path_by_id(category_id):
+    path = []
+    cursor = mysql.connection.cursor()
+    while category_id:
+        cursor.execute("SELECT name, parent_id FROM categories WHERE id = %s", (category_id,))
+        result = cursor.fetchone()
+        if result:
+            name, parent_id = result
+            path.insert(0, name)
+            category_id = parent_id
+        else:
+            break
+    cursor.close()
+    return " > ".join(path) if path else None
+
+def get_category_full_path(cat_id, cursor, cache={}):
+    if cat_id in cache:
+        return cache[cat_id]
+    
+    cursor.execute("SELECT name, parent_id FROM categories WHERE id = %s", (cat_id,))
+    row = cursor.fetchone()
+    if not row:
+        return ""
+
+    name, parent_id = row
+    if parent_id:
+        parent_path = get_category_full_path(parent_id, cursor, cache)
+        full_path = f"{parent_path} > {name}"
+    else:
+        full_path = name
+
+    cache[cat_id] = full_path
+    return full_path
+
+### L.Routes
+
+### 1.General Pages & Home
 
 @app.route('/firstpage')
 def firstpage():
@@ -804,14 +953,7 @@ def testdb():
     except Exception as e:
         return f"Database Connection Error: {str(e)}"
     
-### Chat & Conversation Management
-
-def get_google_shopping_url(product_name, category_name=None):
-    query = product_name
-    if category_name:
-        query += f" {category_name}"
-    query = query.replace(" ", "+")
-    return f"https://www.google.com/search?tbm=shop&q={query}"
+### 2.Chat & Conversation Management
 
 @app.route('/conversation/<int:conversation_id>')
 def view_conversation(conversation_id):
@@ -947,6 +1089,8 @@ def end_chat():
         print(f"Error ending conversation: {e}")
         return redirect(url_for('404'))
 
+### 3.Favourites & Product Detail
+
 @app.route('/favourites')
 def favourites():
     if 'user_id' not in session:
@@ -995,21 +1139,6 @@ def favourites():
 
     return render_template("favourites.html", grouped_products=grouped_products)
 
-def get_category_path_by_id(category_id):
-    path = []
-    cursor = mysql.connection.cursor()
-    while category_id:
-        cursor.execute("SELECT name, parent_id FROM categories WHERE id = %s", (category_id,))
-        result = cursor.fetchone()
-        if result:
-            name, parent_id = result
-            path.insert(0, name)
-            category_id = parent_id
-        else:
-            break
-    cursor.close()
-    return " > ".join(path) if path else None
-
 @app.route('/product/<int:product_id>')
 def product_detail(product_id):
     if 'user_id' not in session:
@@ -1050,6 +1179,8 @@ def product_detail(product_id):
     category_path = get_category_path_by_id(product["category_id"]) if product["category_id"] else None
     return render_template("product_detail.html", product=product, product_id=product_id, google_url=google_url,category_path=category_path)
 
+### 4.Conversation Title Management
+
 @app.route("/generate_title/<int:conversation_id>", methods=["POST"])
 def generate_title(conversation_id):
     user_id = session.get("user_id")
@@ -1065,35 +1196,154 @@ def generate_title(conversation_id):
     )
     return redirect(url_for("view_conversation", conversation_id=conversation_id))
 
-### Contact / Help
+### 5.Category Management
 
-@app.route('/contact', methods=['GET', 'POST'])
-def contact():
-    form = ContactForm()
+@app.route("/api/categories/tree")
+def get_category_tree():
+    cursor = mysql.connection.cursor()
+    cursor.execute("SELECT id, name, parent_id FROM categories")
+    rows = cursor.fetchall()
+    cursor.close()
 
-    if form.validate_on_submit():
-        name = form.name.data
-        email = form.email.data
-        message = form.message.data
+    categories = [{"id": r[0], "name": r[1], "parent_id": r[2]} for r in rows]
 
-        variables = {
-            "name": name,
-            "email": email,
-            "message": message
-        }
+    # id -> category map
+    category_map = {cat["id"]: {**cat, "children": []} for cat in categories}
+    root_categories = []
 
-        success = send_email_from_template("CONTACT_FORM", email, variables)
+    for cat in categories:
+        if cat["parent_id"] is None:
+            root_categories.append(category_map[cat["id"]])
+        else:
+            parent = category_map.get(cat["parent_id"])
+            if parent:
+                parent["children"].append(category_map[cat["id"]])
 
-        if success:
-            return redirect(url_for('contact_success'))
+    return jsonify(root_categories)
 
-    return render_template('contact.html', form=form)
+@app.route('/assign-category/<int:product_id>', methods=['POST'])
+def assign_category_from_detail(product_id):
+    print(f"🧾 Assigning category from detail page for product {product_id}")
 
-@app.route('/contact-success')
-def contact_success():
-    return render_template('contact_success.html')
+    if 'user_id' not in session:
+        print("⛔ Unauthorized access attempt.")
+        return redirect(url_for('login'))
 
-### User Registration & Authentication
+    cursor = mysql.connection.cursor()
+    cursor.execute("""
+        SELECT product_name, product_description
+        FROM product_suggestions
+        WHERE id = %s AND user_id = %s
+    """, (product_id, session["user_id"]))
+    row = cursor.fetchone()
+    cursor.close()
+
+    if not row:
+        print("❌ Product not found in DB.")
+        return "Product not found", 404
+
+    product_name, product_description = row
+    print(f"📦 Product: {product_name}")
+
+    # 🧠 Step-by-step AI prediction
+    path = get_deep_category_path(product_name, product_description)
+    print("📌 Predicted Path:", path)
+
+    # 🆔 Resolve the final category ID
+    category_id = resolve_category_id_from_path(path)
+
+    if category_id:
+        print(f"💾 Updating product_suggestions with category_id={category_id}")
+        cursor = mysql.connection.cursor()
+        cursor.execute("""
+            UPDATE product_suggestions SET category_id = %s WHERE id = %s
+        """, (category_id, product_id))
+        mysql.connection.commit()
+        cursor.close()
+
+        log_action(
+            LogType.CATEGORY_PREDICTED,
+            f"Auto-assigned category {category_id} to product '{product_name}' via product detail page.",
+            user_id=session.get("user_id")
+        )
+        print("✅ Category assignment successful.")
+    else:
+        log_action(
+            LogType.CATEGORY_ASSIGNMENT_FAILED,
+            f"Failed to assign category to product '{product_name}' (ID: {product_id}). Path: {path}",
+            user_id=session.get("user_id")
+        )
+
+    return redirect(url_for("product_detail", product_id=product_id))
+
+@app.route("/categories")
+def show_categories():
+    return render_template("category_tree.html")
+
+@app.route('/product/<int:product_id>/manual-category', methods=['GET', 'POST'])
+def manual_category_assign(product_id):
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    cursor = mysql.connection.cursor()
+
+    # Fetch the product name and current category_id
+    cursor.execute("""
+        SELECT product_name, category_id FROM product_suggestions
+        WHERE id = %s AND user_id = %s
+    """, (product_id, session['user_id']))
+    row = cursor.fetchone()
+
+    if not row:
+        cursor.close()
+        return "Product not found or unauthorized", 404
+
+    product_name = row[0]
+    current_category_id = row[1]
+
+    # Retrieve all category IDs
+    cursor.execute("SELECT id FROM categories")
+    category_ids = [r[0] for r in cursor.fetchall()]
+
+    # Build full path for each category ID
+    categories = []
+    for cat_id in category_ids:
+        path = get_category_full_path(cat_id, cursor)
+        categories.append((cat_id, path))
+
+    # Sort categories alphabetically by path
+    categories.sort(key=lambda x: x[1])
+
+    # If form is submitted
+    if request.method == 'POST':
+        selected_id = request.form.get('category_id')
+        if selected_id:
+            cursor.execute("""
+                UPDATE product_suggestions
+                SET category_id = %s
+                WHERE id = %s
+            """, (selected_id, product_id))
+            mysql.connection.commit()
+            log_action(
+                LogType.PRODUCT_CATEGORY_ASSIGNED_MANUAL,
+                f"Manually assigned category {selected_id} to product ID {product_id}.",
+                user_id=session.get("user_id")
+            )            
+            cursor.close()
+            return redirect(url_for('product_detail', product_id=product_id))
+
+    cursor.close()
+
+    # Render the manual category assignment page
+    return render_template(
+        "manual_category.html",
+        product_id=product_id,
+        product_name=product_name,
+        categories=categories,
+        selected_id=current_category_id
+    )
+
+### 6.User Registration & Authentication
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -1296,7 +1546,7 @@ def logout():
     session.pop('is_google_user', None)
     return render_template('firstpage.html')
 
-### Profile Management
+### 7.Profile Management
 
 @app.route('/profile')
 def profile():
@@ -1466,275 +1716,7 @@ def delete_profile():
     # Redirect the user to the login page after deletion
     return redirect(url_for('login'))
 
-### Category Management
-
-@app.route("/api/categories/tree")
-def get_category_tree():
-    cursor = mysql.connection.cursor()
-    cursor.execute("SELECT id, name, parent_id FROM categories")
-    rows = cursor.fetchall()
-    cursor.close()
-
-    categories = [{"id": r[0], "name": r[1], "parent_id": r[2]} for r in rows]
-
-    # id -> category map
-    category_map = {cat["id"]: {**cat, "children": []} for cat in categories}
-    root_categories = []
-
-    for cat in categories:
-        if cat["parent_id"] is None:
-            root_categories.append(category_map[cat["id"]])
-        else:
-            parent = category_map.get(cat["parent_id"])
-            if parent:
-                parent["children"].append(category_map[cat["id"]])
-
-    return jsonify(root_categories)
-
-def resolve_category_id_from_path(path):
-    print(f"🔍 Resolving category ID from path: {path}")
-    if not path:
-        print("⚠️ No path provided.")
-        return None
-
-    parts = [p.strip() for p in path.split(">")]
-    cursor = mysql.connection.cursor()
-    current_parent_id = None
-
-    for part in parts:
-        print(f"➡️ Searching for category: {part} (parent_id={current_parent_id})")
-        cursor.execute("""
-            SELECT id FROM categories
-            WHERE name = %s AND (parent_id = %s OR (%s IS NULL AND parent_id IS NULL))
-        """, (part, current_parent_id, current_parent_id))
-        result = cursor.fetchone()
-        if result:
-            current_parent_id = result[0]
-            print(f"✔️ Found category ID: {current_parent_id}")
-        else:
-            print(f"❌ Category not found for: {part}")
-            cursor.close()
-            return None
-
-    cursor.close()
-    print(f"🏁 Final category ID: {current_parent_id}")
-    return current_parent_id
-
-def get_deep_category_path(product_name, product_description):
-    print("🚀 Starting step-by-step category path resolution")
-
-    cursor = mysql.connection.cursor()
-    cursor.execute("SELECT id, name FROM categories WHERE parent_id IS NULL")
-    level_categories = cursor.fetchall()
-
-    path = []
-    parent_id = None
-
-    while level_categories:
-        print(f"🔎 Searching among {len(level_categories)} categories at level {len(path) + 1}")
-
-        options = [name for _, name in level_categories]
-
-        system_prompt = f"""
-        You are a product categorization assistant.
-
-        Given a product name and description, and a list of category options at a specific level,
-        choose the most appropriate category.
-
-        Product Name: {product_name}
-        Description: {product_description}
-
-        Categories:
-        {json.dumps(options, indent=2)}
-
-        ❗Only return ONE category name from the list above that best fits. Do NOT explain.
-        """
-
-        try:
-            response = deepseek_chat([
-                SystemMessage(content=system_prompt),
-                HumanMessage(content="Select the best fitting category from the list.")
-            ])
-            cleaned_category = remove_thinking_tags(response.content)
-            chosen_category = cleaned_category.strip()
-            print(f"✅ AI selected: {repr(chosen_category)}")
-            
-        except Exception as e:
-            print("❌ Error during AI selection:", e)
-            break
-
-        # Fetch selected category ID
-        cursor.execute("""
-            SELECT id FROM categories
-            WHERE name = %s AND (parent_id = %s OR (%s IS NULL AND parent_id IS NULL))
-        """, (chosen_category, parent_id, parent_id))
-        result = cursor.fetchone()
-        if not result:
-            print(f"❌ Category '{chosen_category}' not found in DB.")
-            break
-
-        category_id = result[0]
-        path.append(chosen_category)
-        parent_id = category_id
-
-        # Fetch children for next loop
-        cursor.execute("SELECT id, name FROM categories WHERE parent_id = %s", (parent_id,))
-        level_categories = cursor.fetchall()
-
-    cursor.close()
-
-    if path:
-        full_path = " > ".join(path)
-        print(f"🏁 Final path: {full_path}")
-        return full_path
-    else:
-        print("⚠️ No category path could be determined.")
-        return None
-
-@app.route('/assign-category/<int:product_id>', methods=['POST'])
-def assign_category_from_detail(product_id):
-    print(f"🧾 Assigning category from detail page for product {product_id}")
-
-    if 'user_id' not in session:
-        print("⛔ Unauthorized access attempt.")
-        return redirect(url_for('login'))
-
-    cursor = mysql.connection.cursor()
-    cursor.execute("""
-        SELECT product_name, product_description
-        FROM product_suggestions
-        WHERE id = %s AND user_id = %s
-    """, (product_id, session["user_id"]))
-    row = cursor.fetchone()
-    cursor.close()
-
-    if not row:
-        print("❌ Product not found in DB.")
-        return "Product not found", 404
-
-    product_name, product_description = row
-    print(f"📦 Product: {product_name}")
-
-    # 🧠 Step-by-step AI prediction
-    path = get_deep_category_path(product_name, product_description)
-    print("📌 Predicted Path:", path)
-
-    # 🆔 Resolve the final category ID
-    category_id = resolve_category_id_from_path(path)
-
-    if category_id:
-        print(f"💾 Updating product_suggestions with category_id={category_id}")
-        cursor = mysql.connection.cursor()
-        cursor.execute("""
-            UPDATE product_suggestions SET category_id = %s WHERE id = %s
-        """, (category_id, product_id))
-        mysql.connection.commit()
-        cursor.close()
-
-        log_action(
-            LogType.CATEGORY_PREDICTED,
-            f"Auto-assigned category {category_id} to product '{product_name}' via product detail page.",
-            user_id=session.get("user_id")
-        )
-        print("✅ Category assignment successful.")
-    else:
-        log_action(
-            LogType.CATEGORY_ASSIGNMENT_FAILED,
-            f"Failed to assign category to product '{product_name}' (ID: {product_id}). Path: {path}",
-            user_id=session.get("user_id")
-        )
-
-    return redirect(url_for("product_detail", product_id=product_id))
-
-@app.route("/categories")
-def show_categories():
-    return render_template("category_tree.html")
-
-def get_category_full_path(cat_id, cursor, cache={}):
-    if cat_id in cache:
-        return cache[cat_id]
-    
-    cursor.execute("SELECT name, parent_id FROM categories WHERE id = %s", (cat_id,))
-    row = cursor.fetchone()
-    if not row:
-        return ""
-
-    name, parent_id = row
-    if parent_id:
-        parent_path = get_category_full_path(parent_id, cursor, cache)
-        full_path = f"{parent_path} > {name}"
-    else:
-        full_path = name
-
-    cache[cat_id] = full_path
-    return full_path
-
-
-@app.route('/product/<int:product_id>/manual-category', methods=['GET', 'POST'])
-def manual_category_assign(product_id):
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-
-    cursor = mysql.connection.cursor()
-
-    # Fetch the product name and current category_id
-    cursor.execute("""
-        SELECT product_name, category_id FROM product_suggestions
-        WHERE id = %s AND user_id = %s
-    """, (product_id, session['user_id']))
-    row = cursor.fetchone()
-
-    if not row:
-        cursor.close()
-        return "Product not found or unauthorized", 404
-
-    product_name = row[0]
-    current_category_id = row[1]
-
-    # Retrieve all category IDs
-    cursor.execute("SELECT id FROM categories")
-    category_ids = [r[0] for r in cursor.fetchall()]
-
-    # Build full path for each category ID
-    categories = []
-    for cat_id in category_ids:
-        path = get_category_full_path(cat_id, cursor)
-        categories.append((cat_id, path))
-
-    # Sort categories alphabetically by path
-    categories.sort(key=lambda x: x[1])
-
-    # If form is submitted
-    if request.method == 'POST':
-        selected_id = request.form.get('category_id')
-        if selected_id:
-            cursor.execute("""
-                UPDATE product_suggestions
-                SET category_id = %s
-                WHERE id = %s
-            """, (selected_id, product_id))
-            mysql.connection.commit()
-            log_action(
-                LogType.PRODUCT_CATEGORY_ASSIGNED_MANUAL,
-                f"Manually assigned category {selected_id} to product ID {product_id}.",
-                user_id=session.get("user_id")
-            )            
-            cursor.close()
-            return redirect(url_for('product_detail', product_id=product_id))
-
-    cursor.close()
-
-    # Render the manual category assignment page
-    return render_template(
-        "manual_category.html",
-        product_id=product_id,
-        product_name=product_name,
-        categories=categories,
-        selected_id=current_category_id
-    )
-
-
-### Password Reset
+### 8.Password Reset
 
 @app.route('/forgot-password', methods=['GET', 'POST'])
 def forgot_password():
@@ -1769,7 +1751,6 @@ def forgot_password():
             message = "If this email is registered, a reset link has been sent."
 
     return render_template('forgot_password.html', form=form, message=message)
-
 
 @app.route('/reset-password/<token>', methods=['GET', 'POST'])
 def reset_password(token):
@@ -1830,7 +1811,35 @@ def reset_password(token):
 
     return render_template('reset_password.html', form=form)
 
-### Main Entry Point
+### 9.Contact / Help
+
+@app.route('/contact', methods=['GET', 'POST'])
+def contact():
+    form = ContactForm()
+
+    if form.validate_on_submit():
+        name = form.name.data
+        email = form.email.data
+        message = form.message.data
+
+        variables = {
+            "name": name,
+            "email": email,
+            "message": message
+        }
+
+        success = send_email_from_template("CONTACT_FORM", email, variables)
+
+        if success:
+            return redirect(url_for('contact_success'))
+
+    return render_template('contact.html', form=form)
+
+@app.route('/contact-success')
+def contact_success():
+    return render_template('contact_success.html')
+
+### M.Main Entry Point
 
 if __name__ == '__main__':
     app.run(debug=True)

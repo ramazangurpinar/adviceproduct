@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Logs</title>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='image/favicon.ico') }}">
+    <link href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css" rel="stylesheet">
+    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+    <style>
+        body { margin: 0; padding: 0; }
+        .container-fullscreen {
+            width: 100vw;
+            height: 100vh;
+            overflow: auto;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fullscreen">
+        <h2>All Logs</h2>
+        <table id="logsTable" class="display" style="width:100%">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>User ID</th>
+                    <th>Message</th>
+                    <th>Timestamp</th>
+                    <th>Log Type</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs %}
+                <tr>
+                    <td>{{ log.id }}</td>
+                    <td>{{ log.user_id }}</td>
+                    <td>{{ log.message }}</td>
+                    <td>{{ log.timestamp }}</td>
+                    <td>{{ log.log_name }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        $(document).ready(function () {
+            $('#logsTable').DataTable({
+                "order": [[3, "desc"]],  // timestamp default DESC
+                "pageLength": 25,
+                "lengthMenu": [10, 25, 50, 100]
+            });
+        });
+    </script>
+</body>
+</html>
+<!-- End of logs.html -->

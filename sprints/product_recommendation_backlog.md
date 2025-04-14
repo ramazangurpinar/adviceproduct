@@ -1,292 +1,84 @@
-# AI Product Recommendation System — Backlog Plan
+# Sprint Backlog
 
-This document outlines the EPICs, User Stories, and detailed Acceptance Criteria for a 4-sprint agile development plan.
+## Sprint 1
 
----
+### Week 1 - User Registration & Authentication
 
-## ✅ EPIC 1: User Registration & Authentication
+| Epic | Role | User Story | Acceptance Criteria | Assigned to |
+|------|------|------------|----------------------|-------------|
+| User Registration & Authentication | As a new user | I want to register using my email address so that I can create an account and start using the platform immediately. | - Email field exists  <br> - Account created on valid data <br> - Session starts <br> - Redirects to confirmation page | Ramazan |
+|  | As a user | I want to log in with my username and password so that I can securely access my account and continue where I left off. | - Form includes username and password <br> - Validates credentials <br> - Starts session <br> - Redirects to homepage <br> - Eye icon toggles password visibility <br> - JS handles toggle logic <br> - Applies to login and register forms <br> - Works across browsers | Mahek |
+|  | As a user | I want to log in using my Google account so that I can skip filling out forms and access the platform quickly. | - User logs in using Google <br> - Auto-registers if new <br> - Session starts <br> - Redirects to homepage <br> - Email sent on first Google login | George |
+|  | As a user who forgot their password | I want to reset it via email so that I can regain access to my account securely. | - User can request reset by entering email <br> - Email with reset link is sent <br> - Link includes secure token <br> - Reset link opens new password form <br> - New password must be confirmed <br> - Password updated securely <br> - User notified of success | Piero |
 
-### User Story 1.1 — Register with Email/Password
-**As a user**, I want to register with email and password so that I can access the system securely.
+### Week 2 - User Profile & Settings
 
-**Acceptance Criteria**
-- Required fields must not be empty
-- Email must be unique in the system
-- Password must be securely hashed using bcrypt
-- User is redirected to success page after registration
+| Epic | Role | User Story | Acceptance Criteria | Assigned to |
+|------|------|------------|----------------------|-------------|
+| User Profile & Settings | As a user | I want to view my profile so that I can see my account information and verify that my personal details are accurate. | - Form includes username and password <br> - Validates credentials <br> - Starts session <br> - Redirects to homepage <br> - Shows error if invalid | Piero |
+|  | As a user | I want to edit my profile information so that I can keep my personal details up to date. | - Form pre-filled with user data <br> - Fields: name, surname, email, country, age, gender <br> - Updates DB and session <br> - Redirects to profile | Mahek |
+|  | As a user | I want to change my username by confirming my email and password so that I can update my identity securely. | - Form includes current email, password, new username <br> - Checks correctness <br> - Checks uniqueness <br> - Updates DB <br> - Sends confirmation email | Ramazan |
+|  | As a user | I want to permanently delete my account so that I can remove all my data from the platform when I no longer wish to use it. | - Deletes user from DB <br> - Clears session <br> - Redirects to login <br> - Sends information email | George |
 
-### User Story 1.2 — Login with Credentials
-**As a user**, I want to log in securely using my credentials.
+## Sprint 2
 
-**Acceptance Criteria**
-- Incorrect credentials result in error message
-- Correct credentials create a valid session
-- User is redirected to homepage after login
+### Week 3 - Real-time Chat & AI Suggestions
 
-### User Story 1.3 — Google Login
-**As a user**, I want to log in with Google so I can access the system easily.
+| Epic | Role | User Story | Acceptance Criteria | Assigned to |
+|------|------|------------|----------------------|-------------|
+| Real-time Chat & AI Suggestions | As a user | I want to chat with the AI in real-time so that I can get instant responses without page reloads. | - Messages sent via WebSocket appear instantly <br> - Bot response is streamed without delay <br> - Page does not reload between turns | Ramazan |
+|  | As a user | I want all my messages to be saved automatically so that I can view my past conversations whenever I need. | - User and bot messages are stored in DB <br> - Messages are linked to current conversation <br> - Messages can be retrieved later | George |
+|  | As a user | I want to see product suggestions clearly during the chat so that I can quickly review and compare different options. | - Up to 3 suggestions shown at once <br> - Each suggestion has a name and description <br> - HTML formatting is visually clear | Mahek |
+|  | As a user | I want to like or unlike product suggestions so that I can remember and revisit the ones I’m interested in. | - Like status persists across sessions <br> - Click toggles like/unlike immediately <br> - Update as liked in database | Piero |
 
-**Acceptance Criteria**
-- Existing users are matched via email
-- New users are created only once
-- User session is established with Google info
+### Week 4 - Conversation & History
 
-### User Story 1.4 — Password Reset via Email
-**As a user**, I want to reset my password via email if I forget it.
+| Epic | Role | User Story | Acceptance Criteria | Assigned to |
+|------|------|------------|----------------------|-------------|
+| Conversation & History | As a user | I want to start a fresh chat session so that I can get new product recommendations without mixing them with previous messages. | - A new conversation ID is generated <br> - Chat box is cleared when conversation starts | Mahek |
+|  | As a user | I want to view my past conversations so that I can revisit previous suggestions and continue from where I left off. | - Past conversations are listed by title <br> - Each chat is clickable <br> - History loads with messages and suggestions | Ramazan |
+|  | As a user | I want each conversation to have a meaningful AI-generated title so that I can easily recognize it in my chat history. | - Title is generated using AI and keywords <br> - Default title is replaced if relevant <br> - Titles are between 5-10 words | Piero |
+|  | As a user | I want to end a conversation when I'm done so that the session is marked complete and doesn’t continue unnecessarily. | - Button ends current chat <br> - Bot sends 'conversation ended' message <br> - Conversation is marked inactive | George |
 
-**Acceptance Criteria**
-- Reset link expires in 1 hour
-- Expired or invalid tokens are gracefully handled
-- Password must be changed only after token verification
+## Sprint 3
 
----
+### Week 5 - Product & Favourites
 
-## ✅ EPIC 2: User Profile & Settings
+| Epic | Role | User Story | Acceptance Criteria | Assigned to |
+|------|------|------------|----------------------|-------------|
+| Product & Favourites | As a user | I want to view detailed information about a recommended product so that I can learn more before making a decision. | - Product detail includes name, description, date <br> - Product links to original chat <br> - Page opens from favourites or chat | Ramazan |
+|  | As a user | I want to see which message triggered a product suggestion so that I can understand the context of the recommendation. | - Product shows originating message <br> - Conversation title and date are shown <br> - Source chat is clickable | Piero |
+|  | As a user | I want to browse a list of all the products I’ve liked so that I can revisit them later without searching. | - All liked products are grouped by conversation <br> - Each product shows sent time <br> - Liked list is accessible from navbar | George |
+|  | As a user | I want to open a product in Google Shopping so that I can compare prices and availability easily. | - Button/link opens shopping URL <br> - Product name and category used in query <br> - Redirect opens in new tab | Mahek |
 
-### User Story 2.1 — View Profile
-**As a user**, I want to view my profile so I can see my information.
+### Week 6 - AI Category Matching
 
-**Acceptance Criteria**
-- Profile includes name, email, username
-- Optional fields are shown if provided
-- Only logged-in users can view profile
+| Epic | Role | User Story | Acceptance Criteria | Assigned to |
+|------|------|------------|----------------------|-------------|
+| AI Category Matching | As a user | I want the system to automatically detect the best category for each product so that the suggestions feel more relevant and organized. | - AI selects one category per level <br> - Path is stored if resolved fully <br> - Matched category ID saved in DB | Ramazan |
+|  | As a user | I want to see the full category path of a product so that I can understand how it's classified in the system. | - Category path is readable (e.g. A > B > C) <br> - Shown on product detail page <br> - Full chain is resolved recursively | George |
+|  | As a user | I want to manually choose or correct the category of a product so that I can help the system improve future suggestions. | - Select2 dropdown shows all categories <br> - Current selection is preselected <br> - Update button saves to DB | Mahek |
+|  | As a user | I want to see how the AI decides each step of categorization so that I can trust and follow its decision-making process. | - Each level is shown as step <br> - Realtime AI selections are visualized <br> - Only 1 category per level is chosen | Piero |
 
-### User Story 2.2 — Edit Profile
-**As a user**, I want to update my personal details.
+## Sprint 4
 
-**Acceptance Criteria**
-- Fields are pre-filled with current data
-- Changes are saved to the database
-- Confirmation is shown after update
+### Week 7 - Logging Management
 
-### User Story 2.3 — Change Username
-**As a user**, I want to change my username securely.
+| Epic | Role | User Story | Acceptance Criteria | Assigned to |
+|------|------|------------|----------------------|-------------|
+| Logging Management | As an admin | I want to view logs of user activity so that I can monitor important actions and detect suspicious behavior. | - I can view logs of user actions such as login, logout, password changes, and profile updates <br> - Each log entry includes timestamp, user info, log type, and context <br> - I can filter logs by user, action type, or date range <br> - This helps me audit usage patterns and ensure system integrity | Ramazan |
+|  | As an admin | I want to activate or deactivate specific log types so that I can control which events are being logged based on operational needs. | - I can access and update the log_types table directly <br> - Each log type has an isActive flag that determines whether it will be used in the system <br> - Inactive log types are automatically ignored during logging operations <br> - This allows me to reduce noise or disable irrelevant logs without changing application code | Piero |
+|  | As a user | I want to review a history of my recent activity so that I can verify actions taken on my account. | - I can view a list of recent actions like login, logout, password changes <br> - Each action includes a date, time, and short description <br> - This gives me transparency and peace of mind about my account usage | Mahek |
+| Session Management | As a user | I want my session to remain active when I refresh or revisit the page so that I don’t need to log in again unless I explicitly log out. | - My session is maintained for 30 minutes of inactivity <br> - If I close the browser and return within the session lifetime, I’m still recognized <br> - Session expires automatically only after timeout or logout | Ramazan |
+|  | As an admin | I want each user's session start and end times to be logged so that I can monitor login durations and detect abnormal patterns. | - Session start is logged on login <br> - Session end is logged on logout or timeout <br> - These logs help in user activity auditing and security checks | Piero |
+|  | As a user | I want to navigate between pages without losing my session so that I can use the system seamlessly without being logged out. | - I stay logged in while navigating the application <br> - If my session expires, I am redirected to the login page <br> - My identity is validated across routes via the session object | George |
 
-**Acceptance Criteria**
-- User must confirm with password
-- New username must be unique
-- A confirmation email is sent after change
 
-### User Story 2.4 — Delete Account
-**As a user**, I want to delete my account permanently.
+### Week 8 - Email Communication
 
-**Acceptance Criteria**
-- System asks for confirmation
-- User and associated data are removed
-- Confirmation email is sent to user
-
----
-
-## ✅ EPIC 3: Real-time Chat & AI Suggestions
-
-### User Story 3.1 — Real-time Chat
-**As a user**, I want to chat with AI in real-time.
-
-**Acceptance Criteria**
-- Messages sent via WebSocket appear instantly
-- Bot response is streamed without delay
-- Page does not reload between turns
-
-### User Story 3.2 — Save Messages
-**As a user**, I want my messages to be saved.
-
-**Acceptance Criteria**
-- User and bot messages are stored in DB
-- Messages are linked to current conversation
-- Messages can be retrieved later
-
-### User Story 3.3 — Show Product Suggestions
-**As a user**, I want to see product cards in chat.
-
-**Acceptance Criteria**
-- Up to 3 suggestions shown at once
-- Each suggestion has a name and description
-- HTML formatting is visually clear
-
-### User Story 3.4 — Like Product Suggestions
-**As a user**, I want to like/unlike product suggestions.
-
-**Acceptance Criteria**
-- Like status persists across sessions
-- Click toggles like/unlike immediately
-- Changes reflect in database
-
----
-
-## ✅ EPIC 4: Conversation & History
-
-### User Story 4.1 — Start New Chat
-**As a user**, I want to start a new session.
-
-**Acceptance Criteria**
-- A new conversation ID is generated
-- Session is created in DB
-- Chat box is cleared when session starts
-
-### User Story 4.2 — View Past Sessions
-**As a user**, I want to review old chats.
-
-**Acceptance Criteria**
-- Past conversations are listed by title
-- Each chat is clickable
-- History loads with messages and suggestions
-
-### User Story 4.3 — AI-Generated Titles
-**As a user**, I want meaningful chat titles.
-
-**Acceptance Criteria**
-- Title is generated using AI and keywords
-- Default title is replaced if relevant
-- Titles are between 5-10 words
-
-### User Story 4.4 — End Conversation
-**As a user**, I want to end chat manually.
-
-**Acceptance Criteria**
-- Button ends current chat
-- Bot sends "conversation ended" message
-- Session is marked inactive
-
----
-
-## ✅ EPIC 5: Product & Favourites
-
-### User Story 5.1 — View Product Detail
-**As a user**, I want to explore each product in detail.
-
-**Acceptance Criteria**
-- Product detail includes name, description, date
-- Product links to original chat
-- Page opens from favourites or chat
-
-### User Story 5.2 — View Conversation Source
-**As a user**, I want to know where the suggestion came from.
-
-**Acceptance Criteria**
-- Product shows originating message
-- Conversation title and date are shown
-- Source chat is clickable
-
-### User Story 5.3 — View Liked Products
-**As a user**, I want to browse my favourites.
-
-**Acceptance Criteria**
-- All liked products are grouped by session
-- Each product shows sent time
-- Liked list is accessible from navbar
-
-### User Story 5.4 — Open in Google Shopping
-**As a user**, I want to compare products in Google.
-
-**Acceptance Criteria**
-- Button/link opens shopping URL
-- Product name and category used in query
-- Redirect opens in new tab
-
----
-
-## ✅ EPIC 6: AI Category Matching
-
-### User Story 6.1 — Auto Category Matching
-**As a user**, I want AI to assign product categories.
-
-**Acceptance Criteria**
-- AI selects one category per level
-- Path is stored if resolved fully
-- Matched category ID saved in DB
-
-### User Story 6.2 — View Category Path
-**As a user**, I want to see product hierarchy.
-
-**Acceptance Criteria**
-- Category path is readable (e.g. A > B > C)
-- Shown on product detail page
-- Full chain is resolved recursively
-
-### User Story 6.3 — Manual Category Assignment
-**As a user**, I want to pick a category manually.
-
-**Acceptance Criteria**
-- Select2 dropdown shows all categories
-- Current selection is preselected
-- Update button saves to DB
-
-### User Story 6.4 — Step-by-Step AI Logic
-**As a user**, I want to understand category suggestions.
-
-**Acceptance Criteria**
-- Each level is shown as step
-- Realtime AI selections are visualized
-- Only 1 category per level is chosen
-
----
-
-## ✅ EPIC 7: Admin & Logging
-
-### User Story 7.1 — Log User Actions
-**As an admin**, I want to monitor activity.
-
-**Acceptance Criteria**
-- Login, logout, register, edit actions logged
-- Logs are stored in `app_logs`
-- Timestamp and user ID are saved
-
-### User Story 7.2 — Log Sent Emails
-**As an admin**, I want to track emails.
-
-**Acceptance Criteria**
-- Email logs include subject, status, error
-- Template name is logged
-- Recipient address is stored
-
-### User Story 7.3 — Log Type Classification
-**As an admin**, I want to filter log types.
-
-**Acceptance Criteria**
-- All logs include log_type_id
-- Log types are listed in a table
-- Types include AI, USER, SYSTEM categories
-
-### User Story 7.4 — Log AI Failures
-**As an admin**, I want to trace AI issues.
-
-**Acceptance Criteria**
-- AskDeepSeek exceptions are caught
-- Logs include conversation and error
-- Failures are visible in log table
-
----
-
-## ✅ EPIC 8: Email Communication
-
-### User Story 8.1 — Contact Form Email
-**As a user**, I want to send support requests.
-
-**Acceptance Criteria**
-- Contact form includes name, email, message
-- Sends email to admin inbox
-- Success page is shown after send
-
-### User Story 8.2 — Welcome Email
-**As a user**, I want to feel welcomed.
-
-**Acceptance Criteria**
-- Welcome email is sent after signup
-- Includes personalized message
-- Template from DB is used
-
-### User Story 8.3 — Password Change Email
-**As a user**, I want confirmation after changing password.
-
-**Acceptance Criteria**
-- Email sent after reset/change
-- Token link expires in 1 hour
-- Includes security message
-
-### User Story 8.4 — Email Template System
-**As a user**, I want pretty emails.
-
-**Acceptance Criteria**
-- Templates stored in database
-- Rendered with Jinja2 engine
-- Emails match brand formatting
+| Epic | Role | User Story | Acceptance Criteria | Assigned to |
+|------|------|------------|----------------------|-------------|
+| Email Communication | As an admin | I want to store email templates in the database so that they can be managed dynamically and updated without code changes. | - Templates must be saved with fields: name, subject, body. <br> - Each template must have a unique name used as an identifier. <br> - Templates can be fetched by name via query. <br> - Admins can later modify templates via backend or admin UI. | Piero |
+|  | As an admin | I want to see logs of all outgoing emails so that I can ensure messages are being delivered successfully. | - Each log includes recipient, template name, status (sent/failed), and error (if any) <br> - I can search and filter logs by user or email type <br> - This helps identify delivery issues and improves system reliability | Ramazan |
+|  | As a user | I want to view a history of emails sent to me by the system so that I can confirm important messages were delivered and take action if needed. | - I can see a list of emails sent to my account (e.g., password reset, username change) <br> - Each email entry includes the subject, date, time, and delivery status (sent/failed) <br> - I can use this list to verify that I received all important system communications | George |
+|  | As a user | I want to send a support request through the Contact Us form so that I can get help from the support team when I face a problem. | - I can fill out a form with my message, subject, and contact details <br> - The system sends my request as an email to the support team <br> - I receive a confirmation that my request has been submitted successfully <br> - Optionally, I can be notified when my request is received or answered | Mahek |

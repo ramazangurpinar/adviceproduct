@@ -1895,7 +1895,7 @@ def view_logs():
 
 @app.route("/email-logs")
 def email_logs():
-    user_email = session.get("username")
+    user_id = session.get("user_id")
     is_admin = session.get("is_admin")
 
     cursor = mysql.connection.cursor()
@@ -1915,6 +1915,13 @@ def email_logs():
             ORDER BY sent_at DESC
         """)
     else:
+        cursor.execute("SELECT email FROM users WHERE id = %s", (user_id,))
+        user_email = cursor.fetchone()
+
+        if not user_email:
+            cursor.close()
+            return "User email not found", 404
+        
         cursor.execute("""
             SELECT 
                 id,
@@ -1928,7 +1935,7 @@ def email_logs():
             FROM email_logs
             WHERE recipient_email = %s
             ORDER BY sent_at DESC
-        """, (user_email,))
+        """, (user_email[0],))
 
     rows = cursor.fetchall()
     columns = [desc[0] for desc in cursor.description]
@@ -1936,6 +1943,7 @@ def email_logs():
 
     logs = [dict(zip(columns, row)) for row in rows]
     return render_template("email_logs.html", logs=logs)
+
 
 
 ### M.Main Entry Point

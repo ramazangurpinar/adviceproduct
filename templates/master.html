@@ -21,15 +21,12 @@
       </a>
     
       <div class="ms-auto d-flex align-items-center gap-3">
-        {% if session.get('is_admin') %}
-          <a href="{{ url_for('view_logs') }}">
-            <img src="{{ url_for('static', filename='image/setting.png') }}" alt="System Logs" width="24" height="24">
-          </a>
-          <a href="{{ url_for('email_logs') }}">
-            <img src="{{ url_for('static', filename='image/mailsetting.png') }}" alt="Email Logs" width="24" height="24">
-          </a>
-        {% endif %}
-    
+        <a href="{{ url_for('view_logs') }}">
+          <img src="{{ url_for('static', filename='image/setting.png') }}" alt="System Logs" width="24" height="24">
+        </a>
+        <a href="{{ url_for('email_logs') }}">
+          <img src="{{ url_for('static', filename='image/mailsetting.png') }}" alt="Email Logs" width="24" height="24">
+        </a>
         <a href="{{ url_for('favourites') }}">
           <img src="{{ url_for('static', filename='image/heart.png') }}" alt="Favourites" width="24" height="24">
         </a>

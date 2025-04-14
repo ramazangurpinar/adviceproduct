@@ -1846,56 +1846,97 @@ def contact_success():
 
 @app.route('/logs')
 def view_logs():
-    if not session.get("is_admin"):
-        return redirect(url_for("index"))
-        
+    user_id = session.get("user_id")
+    is_admin = session.get("is_admin")
+
     cursor = mysql.connection.cursor()
-    cursor.execute("""
-        SELECT 
-            al.id,
-            al.user_id,
-            al.message,
-            al.timestamp,
-            lt.log_name,
-            lt.isActive
-        FROM 
-            app_logs al
-        JOIN 
-            log_types lt ON al.log_type_id = lt.log_type_id
-        ORDER BY 
-            al.timestamp DESC;
-    """)
+
+    if is_admin:
+        cursor.execute("""
+            SELECT 
+                al.id,
+                al.user_id,
+                al.message,
+                al.timestamp,
+                lt.log_name,
+                lt.isActive
+            FROM 
+                app_logs al
+            JOIN 
+                log_types lt ON al.log_type_id = lt.log_type_id
+            ORDER BY 
+                al.timestamp DESC;
+        """)
+    else:
+        cursor.execute("""
+            SELECT 
+                al.id,
+                al.user_id,
+                al.message,
+                al.timestamp,
+                lt.log_name,
+                lt.isActive
+            FROM 
+                app_logs al
+            JOIN 
+                log_types lt ON al.log_type_id = lt.log_type_id
+            WHERE
+                al.user_id = %s
+            ORDER BY 
+                al.timestamp DESC;
+        """, (user_id,))
+
     logs = cursor.fetchall()
     cursor.close()
 
     columns = ['id', 'user_id', 'message', 'timestamp', 'log_name', 'isActive']
     return render_template("logs.html", logs=[dict(zip(columns, row)) for row in logs])
 
+
 @app.route("/email-logs")
 def email_logs():
-    if not session.get("is_admin"):
-        return redirect(url_for("index"))
-    
+    user_email = session.get("username")
+    is_admin = session.get("is_admin")
+
     cursor = mysql.connection.cursor()
-    cursor.execute("""
-        SELECT 
-            id,
-            template_name,
-            recipient_email,
-            subject,
-            body,
-            status,
-            error_message,
-            sent_at
-        FROM email_logs
-        ORDER BY sent_at DESC
-    """)
+
+    if is_admin:
+        cursor.execute("""
+            SELECT 
+                id,
+                template_name,
+                recipient_email,
+                subject,
+                body,
+                status,
+                error_message,
+                sent_at
+            FROM email_logs
+            ORDER BY sent_at DESC
+        """)
+    else:
+        cursor.execute("""
+            SELECT 
+                id,
+                template_name,
+                recipient_email,
+                subject,
+                body,
+                status,
+                error_message,
+                sent_at
+            FROM email_logs
+            WHERE recipient_email = %s
+            ORDER BY sent_at DESC
+        """, (user_email,))
+
     rows = cursor.fetchall()
     columns = [desc[0] for desc in cursor.description]
     cursor.close()
 
     logs = [dict(zip(columns, row)) for row in rows]
     return render_template("email_logs.html", logs=logs)
+
 
 ### M.Main Entry Point
 

@@ -269,9 +269,10 @@ def log_email(template_name, recipient_email, subject, body, status="SUCCESS", e
 ###-------------------------------------------------------------------------
 ### E-mail Handling
 
-###  Fetches the subject and body of an email template from the database
+### Fetches the subject and body of an email template from the database
 def get_email_template(template_name):
     cursor = mysql.connection.cursor()
+    ### Query
     cursor.execute("SELECT subject, body FROM email_templates WHERE name = %s", (template_name,))
     result = cursor.fetchone()
     cursor.close()
@@ -279,28 +280,39 @@ def get_email_template(template_name):
         return {"subject": result[0], "body": result[1]}
     return None
 
+### Function that using Jinja2 renders template string using the provided variables
 def render_template_from_db(text, variables):
     template = Template(text)
     return template.render(**variables)
 
+### Function that sends an email using a DB stored template
 def send_email_from_template(template_name, to_email, variables):
     template = get_email_template(template_name)
+    ### If the template is not found, print an error message and return False
     if not template:
         print(f"Template {template_name} not found.")
         return False
 
+    ### Render the subject and body using the provided variables
     subject = render_template_from_db(template["subject"], variables)
+    ### Render the body using the provided variables
     body = render_template_from_db(template["body"], variables)
 
+    ### Set up the email sender
     sender_email = os.getenv("EMAIL_USER")
+    ### Set up the sender name
     sender_name = "Botify"
+    ### Set up the sender password
     sender_password = os.getenv("EMAIL_PASS")
 
+    ### Create the email message
     message = MIMEText(body)
+    ### Set the email headers
     message["Subject"] = subject
     message['From'] = f"{sender_name} <{sender_email}>"
     message["To"] = to_email
 
+    ### Try to set the email sender
     try:
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
             server.login(sender_email, sender_password)
@@ -308,23 +320,30 @@ def send_email_from_template(template_name, to_email, variables):
 
         log_email(template_name, to_email, subject, body, status="SUCCESS")
         return True
+    ### If the email sender fails, log the error and return False
     except Exception as e:
         print("Email send failed:", str(e))
         return False
-    
+
+### Send password reset email using a token
 def send_reset_email(to_email, token):
     reset_url = url_for('reset_password', token=token, _external=True)
     return send_email_from_template("RESETPASSWORD", to_email, {"reset_url": reset_url})
 
+### Sends confirmation email when a password has been changed
 def send_password_changed_email(username, to_email):
     return send_email_from_template("PASSWORDCHANGED", to_email, {"username": username})
 
-### F.AI & Chat Logic
+###-------------------------------------------------------------------------
+### AI & Chat Logic
 
+### Function to extract keywords from a given text ignoring common stop words
 def extract_keywords(text, top_n=5):
     print(f"Extracting keywords from text: {text}")
     
+    ### Basic word extraction using regex
     words = re.findall(r'\b\w+\b', text.lower())
+    ### Filter out stop words, short words, and digits
     filtered_words = [
         word for word in words 
         if word not in ENGLISH_STOP_WORDS 
@@ -332,32 +351,38 @@ def extract_keywords(text, top_n=5):
         and not word.isdigit()
     ]
 
+    ### No words found
     word_counts = Counter(filtered_words)
+    ### Get the most common words
     top_keywords = [word.capitalize() for word, count in word_counts.most_common(top_n)]
 
     print(f"Top keywords: {top_keywords}")
     return top_keywords
 
+### Function to remove <think> tags from the input string (DeepSeek response)
 def remove_thinking_tags(input_string):
     cleaned_string = re.sub(r'<think>.*?</think>', '', input_string, flags=re.DOTALL).strip()
     return cleaned_string
 
+### Function to separate products from DeepSeek responce
 def separate_numbered_suggestions(text):
     pattern = r"<PRODUCT>\s*-\s*(.*?)\s*-\s*(.*?)($|\n)"
     matches = re.findall(pattern, text)
     return [{"name": name.strip(), "description": desc.strip()} for name, desc, _ in matches]
 
+### Function to get products suggestions from DeepSeek
 def ask_deepseek(user_message, user_context=None, conversation_history=None):
     if conversation_history is None:
         conversation_history = []
 
+    ### Terminal response
     print(f"🧠🧠🧠 ask_deepseek called | message: {user_message}")
     print(f"User context: {user_context}")
     print(f"Conversation history length: {len(conversation_history)}")
     print(f"Session: {session}")
 
     try:
-        # 🧾 Base instruction prompt
+        ### Prompt for the DeepSeek model
         system_prompt = """
         You are an AI assistant designed to help users choose products.
 
@@ -376,18 +401,22 @@ def ask_deepseek(user_message, user_context=None, conversation_history=None):
         ❗Do NOT use any numbering like "1.", "2.", etc. Only use <PRODUCT> tags.
         """
         print(f"System prompt: {system_prompt}")
-        # 🎯 Add context if available
+        ### Add context if available
         if user_context:
             if user_context.get("age"):
+                ### Age of the user
                 system_prompt += f" The user is {user_context['age']} years old."
             if user_context.get("gender"):
-                system_prompt += f" They are {user_context['gender']}."
+                ### gender of the user
+                system_prompt += f" The user is a {user_context['gender']}."
             if user_context.get("country"):
-                system_prompt += f" They are from {user_context['country']}."
+                ### Country of the user
+                system_prompt += f" The user is from {user_context['country']}."
             if user_context.get("keywords"):
+                ### Keywords of the user
                 system_prompt += f" The user's key concerns are: {', '.join(user_context['keywords'])}."
 
-        # 🧱 Build LangChain message list
+        # Build LangChain message list
         messages = [SystemMessage(content=system_prompt)]
         print (f"System prompt: {system_prompt}")
         print (f"Messages: {messages}")

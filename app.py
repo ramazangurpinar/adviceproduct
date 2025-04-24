@@ -416,34 +416,40 @@ def ask_deepseek(user_message, user_context=None, conversation_history=None):
                 ### Keywords of the user
                 system_prompt += f" The user's key concerns are: {', '.join(user_context['keywords'])}."
 
-        # Build LangChain message list
+        ### Build LangChain message list
         messages = [SystemMessage(content=system_prompt)]
+        ### Terminal output
         print (f"System prompt: {system_prompt}")
         print (f"Messages: {messages}")
+        ### Add conversation history
         for msg in conversation_history:
             if msg["role"] == "user":
                 messages.append(HumanMessage(content=msg["content"]))
             elif msg["role"] == "bot":
                 messages.append(AIMessage(content=msg["content"]))
 
-        # ➕ Add new user message
+        ### Add new user message
         messages.append(HumanMessage(content=user_message))
         print(f"Messages: {messages}")
 
-        # 🔗 Call the model
+        ### Call the model
         response = deepseek_chat(messages)
+        ### Terminal output response
         print(f"Response: {response.content}")
+        ### Saving response variable with <think> tags removed
         bot_reply = remove_thinking_tags(response.content)
         print(f"Bot reply: {bot_reply}")
-        # 🧹 Clean response
+        ### Clean response with previous functions
         structured = separate_numbered_suggestions(bot_reply)
         print(f"Structured response: {structured}")
-        # 🧾 Update history for next turn
+        ### Update history for next call
         conversation_history.append({"role": "user", "content": user_message})
         conversation_history.append({"role": "bot", "content": bot_reply})
         print (f"Conversation history updated: {conversation_history}")
+        ### return row response and structured response
         return bot_reply, structured
 
+    ### If the model fails to respond, log the error and return a default message
     except Exception as e:
         log_action(
             LogType.AI_RESPONSE_FAILED,
@@ -452,24 +458,29 @@ def ask_deepseek(user_message, user_context=None, conversation_history=None):
         )        
         return "Sorry, I couldn't generate a response.", conversation_history
 
+### Function to get user informations (age, gender, country)
 def get_user_context(user_id, conversation_id=None):
-    # get user context from database
+    ### get user context from database
     print(f"Fetching user context for user_id: {user_id}, conversation_id: {conversation_id}")
     cursor = mysql.connection.cursor()
+    ### Query
     cursor.execute("SELECT age, gender, country FROM users WHERE id = %s", (user_id,))
     result = cursor.fetchone()
 
     context = {}
+    ### If user is found, get the context
     if result:
         context = {
             "age": result[0],
             "gender": result[1],
+            ### Get country name from the code using the function get_country_name(code)
             "country": get_country_name(result[2])
         }
 
     # get keywords from conversation if conversation_id is provided
     print(f"Fetching keywords for conversation_id: {conversation_id}")
     if conversation_id:
+        ### Query
         cursor.execute("SELECT keywords FROM conversations WHERE conversation_id = %s", (conversation_id,))
         keyword_result = cursor.fetchone()
         if keyword_result and keyword_result[0]:
@@ -479,18 +490,24 @@ def get_user_context(user_id, conversation_id=None):
     cursor.close()
     return context
 
+###--------------------------------------------------------------------------
 ### G.Conversation Management
 
+### Function to start a new conversation
 def start_new_conversation(user_id, title="Untitled"):
     cursor = mysql.connection.cursor()
+    ### Query to insert a new conversation in DB
     cursor.execute("""
         INSERT INTO conversations (user_id, title, created_at, keywords, is_active, last_activity_at)
         VALUES (%s, %s, NOW(), '', TRUE, NOW())
     """, (user_id, title))
+
     mysql.connection.commit()
     conversation_id = cursor.lastrowid
     cursor.close()
     session['conversation_id'] = conversation_id
+
+    ### Emit event to frontend
     emit("conversation_initialized", {"conversation_id": conversation_id})
     log_action(
         LogType.CONVERSATION_STARTED,
@@ -499,62 +516,81 @@ def start_new_conversation(user_id, title="Untitled"):
     )
     return conversation_id
 
+### Function to update conversation keywords
 def update_conversation_keywords(conversation_id, new_keywords):
     cursor = mysql.connection.cursor()
 
+    ### Query to get existing keywords
     cursor.execute("SELECT keywords FROM conversations WHERE conversation_id = %s", (conversation_id,))
     result = cursor.fetchone()
     existing_keywords = set()
 
+    ### If keywords are found, split them into a set
     if result and result[0]:
         existing_keywords = set(k.strip() for k in result[0].split(','))
 
+    ### Union with new keywords
     combined_keywords = existing_keywords.union(set(new_keywords))
-
+    ### Remove duplicates
     keyword_text = ", ".join(sorted(combined_keywords))
 
+    ### Query update keywords
     cursor.execute("""
         UPDATE conversations SET keywords = %s WHERE conversation_id = %s
     """, (keyword_text, conversation_id))
     mysql.connection.commit()
     cursor.close()
 
+### Function to update last activity timestamp
 def update_last_activity(conversation_id):
     print(f"Updating last activity for conversation_id: {conversation_id}")
     cursor = mysql.connection.cursor()
+    ### Query to update last activity timestamp
     cursor.execute("""
         UPDATE conversations SET last_activity_at = NOW() WHERE conversation_id = %s
     """, (conversation_id,))
     mysql.connection.commit()
     cursor.close()
 
+### Function to check if a conversation has expired
 def is_conversation_expired(conversation_id, minutes= 30):
     print(f"Checking if conversation_id: {conversation_id} is expired")
     cursor = mysql.connection.cursor()
+    ### Query to get last activity timestamp
     cursor.execute("SELECT last_activity_at FROM conversations WHERE conversation_id = %s", (conversation_id,))
     result = cursor.fetchone()
     print(f"Last activity result: {result}")
     cursor.close()
     if result and result[0]:
         last_active = result[0]
+        ### If last activity is older than the specified time, return True
         if datetime.now(timezone.utc) - last_active.replace(tzinfo=timezone.utc) > timedelta(minutes=minutes):
             return True
+    ### Else return False
     return False
 
+### Function to end a conversation
 def end_conversation(conversation_id):
     cursor = mysql.connection.cursor()
+    ### Query to end the conversation
     cursor.execute("""
         UPDATE conversations SET is_active = 0 WHERE conversation_id = %s
     """, (conversation_id,))
     mysql.connection.commit()
     cursor.close()
+    ### Log the action
     log_action(LogType.CONVERSATION_ENDED, f"Conversation {conversation_id} auto-ended (timeout)", user_id=session.get("user_id"))
     session.pop('conversation_id', None)
 
+### Function to save a message in the database
 def save_message(conversation_id, sender_type, content):
+    ### If content is a list/tuple join into a single string
     if isinstance(content, (list, tuple)):
-        content = " ".join(map(str, content))  # Her elemanı string yap ve birleştir
+        ### Ensure all elements are strings and concatenate
+        content = " ".join(map(str, content))
+
     cursor = mysql.connection.cursor()
+    ### Query to insert a new message
     cursor.execute("""
         INSERT INTO messages (conversation_id, sender_type, content, sent_at)
         VALUES (%s, %s, %s, NOW())
@@ -562,8 +598,10 @@ def save_message(conversation_id, sender_type, content):
     mysql.connection.commit()
     cursor.close()
 
+### Function to get conversation history
 def get_conversation_history(conversation_id):
     cursor = mysql.connection.cursor()
+    ### Query to get conversation history
     cursor.execute("""
         SELECT sender_type, content
         FROM messages
@@ -574,6 +612,7 @@ def get_conversation_history(conversation_id):
     cursor.close()
 
     history = []
+    ### Iterate through the raw history and format it
     for sender_type, content in raw_history:
         if sender_type == "user":
             history.append({"role": "user", "content": content})
@@ -581,12 +620,12 @@ def get_conversation_history(conversation_id):
             history.append({"role": "bot", "content": content})
     return history
 
+### Function to get the conversation status
 def update_conversation_status(conversation_id, status):
-    # Assuming you have a Conversation model or direct SQL query to update the status
-    connection = get_db_connection()  # Your database connection method
+    connection = get_db_connection()
     cursor = connection.cursor()
 
-    # SQL query to update the status of the conversation
+    ### Query to update the conversation status
     query = "UPDATE conversations SET is_active = %s WHERE conversation_id = %s"
     cursor.execute(query, (status, conversation_id))
 
@@ -594,7 +633,8 @@ def update_conversation_status(conversation_id, status):
     cursor.close()
     connection.close()
 
-### H.AI Title & Keywords Handling
+###----------------------------------------------------------------------------
+### AI Title & Keywords Handling
 
 def extract_title_from_llm_output(cleaned_text):
     match = re.search(r"<TITLE>(.*?)</TITLE>", cleaned_text, re.IGNORECASE | re.DOTALL)

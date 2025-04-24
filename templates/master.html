@@ -16,22 +16,29 @@
 </head>
 <body>
     <nav class="navbar navbar-expand-lg px-4">
-        <a class="navbar-brand" href="{{ url_for('index') }}">
-          <img src="{{ url_for('static', filename='image/home.png') }}" alt="Home" width="30" height="30">
+      <a class="navbar-brand" href="{{ url_for('index') }}">
+        <img src="{{ url_for('static', filename='image/home.png') }}" alt="Home" width="30" height="30">
+      </a>
+    
+      <div class="ms-auto d-flex align-items-center gap-3">
+        <a href="{{ url_for('view_logs') }}">
+          <img src="{{ url_for('static', filename='image/setting.png') }}" alt="System Logs" width="24" height="24">
         </a>
-      
-        <div class="ms-auto d-flex align-items-center gap-3">
-          <a href="{{ url_for('favourites') }}">
-            <img src="{{ url_for('static', filename='image/heart.png') }}" alt="Favourites" width="24" height="24">
-          </a>
-          <a href="{{ url_for('profile') }}">
-            <img src="{{ url_for('static', filename='image/user.png') }}" alt="User" width="24" height="24">
-          </a>
-          <a href="{{ url_for('logout') }}">
-            <img src="{{ url_for('static', filename='image/logout.png') }}" alt="Logout" width="24" height="24">
-          </a>
-        </div>
-    </nav> 
+        <a href="{{ url_for('email_logs') }}">
+          <img src="{{ url_for('static', filename='image/mailsetting.png') }}" alt="Email Logs" width="24" height="24">
+        </a>
+        <a href="{{ url_for('favourites') }}">
+          <img src="{{ url_for('static', filename='image/heart.png') }}" alt="Favourites" width="24" height="24">
+        </a>
+        <a href="{{ url_for('profile') }}">
+          <img src="{{ url_for('static', filename='image/user.png') }}" alt="User" width="24" height="24">
+        </a>
+        <a href="{{ url_for('logout') }}">
+          <img src="{{ url_for('static', filename='image/logout.png') }}" alt="Logout" width="24" height="24">
+        </a>
+      </div>
+    </nav>
+  
     <hr class="my-0 border-top border-secondary">         
     <div class="main-content">
         {% block content %}{% endblock %}

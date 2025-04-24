@@ -774,10 +774,12 @@ def try_generate_title_if_needed(conversation_id):
 ###------------------------------------------------------------------------
 ### Product Suggestions & Likes
 
+### Function to save product suggestions in the database
 def save_product_suggestions(user_id, conversation_id, message_id, structured_products):
 
     cursor = mysql.connection.cursor()
 
+    ### for each product in the structured products insert into the database
     for product in structured_products:
         product_name = product.get("name")
         product_description = product.get("description")
@@ -793,6 +795,7 @@ def save_product_suggestions(user_id, conversation_id, message_id, structured_pr
         ))
 
     mysql.connection.commit()
+    ### Emit event to frontend
     log_action(
         LogType.PRODUCT_SUGGESTION_SAVED,
         f"{len(structured_products)} product(s) saved for conversation {conversation_id}.",
@@ -800,15 +803,25 @@ def save_product_suggestions(user_id, conversation_id, message_id, structured_pr
     )
     cursor.close()
 
+### Handles a real-time 'toggle_like' event from the client.
+### Updates the 'liked' status of a product suggestion in the database,
+### Logs the like/unlike action for the specified user.
 @socketio.on("toggle_like")
 def handle_toggle_like(data):
+    ### Getting user id from the session
     user_id = data.get("user_id")
+    ### Getting message id from the session
     message_id = data.get("message_id")
+    ### Getting conversation id from the session
     conversation_id = data.get("conversation_id")
+    ### Getting product name from the session
     product_name = data.get("product_name")
+    ### Getting liked status from the session
     liked = data.get("liked")
 
     cursor = mysql.connection.cursor()
+
+    ### Query to update the liked status of a product suggestion
     cursor.execute("""
         UPDATE product_suggestions
         SET liked = %s
@@ -818,12 +831,14 @@ def handle_toggle_like(data):
     mysql.connection.commit()
     cursor.close()
 
+    ### Frontend "herat"
     if liked:
         log_action(LogType.PRODUCT_LIKED, f"User {user_id} liked product: {product_name}", user_id=user_id)
     else:
         log_action(LogType.PRODUCT_UNLIKED, f"User {user_id} unliked product: {product_name}", user_id=user_id)
 
-### J.SocketIO Events
+###-------------------------------------------------------------------------
+### SocketIO Events
 
 @socketio.on("session_check")
 def handle_session_check():

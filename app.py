@@ -491,7 +491,7 @@ def get_user_context(user_id, conversation_id=None):
     return context
 
 ###--------------------------------------------------------------------------
-### G.Conversation Management
+### Conversation Management
 
 ### Function to start a new conversation
 def start_new_conversation(user_id, title="Untitled"):
@@ -636,36 +636,48 @@ def update_conversation_status(conversation_id, status):
 ###----------------------------------------------------------------------------
 ### AI Title & Keywords Handling
 
+### Auxiliary function to extract the title from the LLM output
 def extract_title_from_llm_output(cleaned_text):
+    ### Use regex to find the content inside <TITLE> tags
     match = re.search(r"<TITLE>(.*?)</TITLE>", cleaned_text, re.IGNORECASE | re.DOTALL)
+    ### If a match is found, extract the title
     if match:
         title = match.group(1).strip()
         word_count = len(title.split())
         if 2 <= word_count <= 15:
             return title
         else:
+            ### If the word count is too short print on terninal error message
             print(f"Invalid title word count ({word_count}): '{title}'")
     else:
+        ### If tag <TITLE> is not found, print on terminal error message
         print("<TITLE> tag not found in LLM output.")
     return None
 
+### Function to extract from the DB the keywords for a conversation
 def get_keywords_for_conversation(conversation_id):
     cursor = mysql.connection.cursor()
+    ### Query to get keywords for the conversation
     cursor.execute("SELECT keywords FROM conversations WHERE conversation_id = %s", (conversation_id,))
     result = cursor.fetchone()
     cursor.close()
 
+    ### If no keywords are found, return an empty list
     if not result or not result[0]:
         return []
     return [k.strip() for k in result[0].split(',') if k.strip()]
 
+### Function that using keywords from the conversation generates a title (AI)
 def generate_ai_title_from_keywords(conversation_id):
+    ### Get keywords for the conversation using the function get_keywords_for_conversation
     keywords = get_keywords_for_conversation(conversation_id)
+    ### If no keywords are found, return a default title
     if not keywords:
         return "Chat Session"
-
+    ### If keywords are found, join them into a string separated ", "
     keyword_text = ", ".join(keywords)
 
+    ### Prompt to generate a title
     system_prompt = """
     You are a product recommendation assistant.
 
@@ -681,33 +693,47 @@ def generate_ai_title_from_keywords(conversation_id):
     Example:
     <TITLE>Best Budget Smartphones for Gaming Enthusiasts</TITLE>
     """
-
+    ### User prompt with keywords
     user_prompt = f"Keywords: {keyword_text}"
     print(f"[🧠 PROMPT] {system_prompt}")
     
     try:
+        ### Call the model with system and user prompts
         response = deepseek_chat([
+            ### System message with the prompt
             SystemMessage(content=system_prompt),
+            ### User message with the keywords
             HumanMessage(content=user_prompt)
         ])
+        ### Terminal output response
         print(f"[🧠 RESPONSE - response.content:] {response.content}")
 
+        ### Clean response with previous function
         bot_reply_title = remove_thinking_tags(response.content)
         print(f"[🧠 CLEANED bot_reply_title] {bot_reply_title}")
+        ### Extract title from the cleaned response
         title = extract_title_from_llm_output(bot_reply_title)
+        ### If title is not found, return a default title
         return title or f"{keyword_text}"
+    
+    ### If the model fails to respond, log the error and return a default title
     except Exception as e:
+        ### Comsole output error message
         print(f"❌ AI title generation failed: {e}")
         return f"Chat Session: {keyword_text}"
 
+### Function to update the conversation title in the database
 def update_conversation_title(conversation_id, new_title):
     cursor = mysql.connection.cursor()
+
+    ### Query to update the conversation title
     cursor.execute("""
         UPDATE conversations SET title = %s WHERE conversation_id = %s
     """, (new_title, conversation_id))
     mysql.connection.commit()
     cursor.close()
 
+### Function that change title if it's too generic
 def try_generate_title_if_needed(conversation_id):
     """
     If the current title is default (e.g., 'Chat Session', 'Untitled', etc.),
@@ -715,18 +741,24 @@ def try_generate_title_if_needed(conversation_id):
     """
     cursor = mysql.connection.cursor()
     
+    ### Query to get the current title
     cursor.execute("SELECT title FROM conversations WHERE conversation_id = %s", (conversation_id,))
     result = cursor.fetchone()
     
+    ### If no title is found return nothing 
     if not result:
         cursor.close()
         return  # No such conversation
 
+    ### Clean current title
     current_title = result[0].strip().lower()
+    ### List of different default titles
     default_titles = {"chat session", "untitled", "new chat after timeout"}
 
+    ### If the current title is in the list of default titles generate a new title
     if current_title in default_titles:
         generated_title = generate_ai_title_from_keywords(conversation_id)
+        ### If successfully generated a title, update the conversation title in the database
         if generated_title:
             update_conversation_title(conversation_id, generated_title)
             log_action(
@@ -734,11 +766,13 @@ def try_generate_title_if_needed(conversation_id):
                 f"AI generated a title for conversation {conversation_id}: {generated_title}",
                 user_id=session.get("user_id")
             )
+            ### Terminal output
             print("✅ Title generated:", generated_title)
 
     cursor.close()
 
-### I.Product Suggestions & Likes
+###------------------------------------------------------------------------
+### Product Suggestions & Likes
 
 def save_product_suggestions(user_id, conversation_id, message_id, structured_products):
 

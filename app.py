@@ -1,39 +1,69 @@
+### All necessary library to meke the web application work:
+### Import Flask and other utilities templates, handling sessions, redirects, requests, and JSON responses
 from flask import Flask, json, render_template, redirect, url_for, session, request, jsonify
+### Import FlaskForm for creating secure web forms and field types
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField, IntegerField, SelectField, TextAreaField
+### Validators and custom validators
 from wtforms.validators import DataRequired, Length, ValidationError, Optional
+### Secure password handling
 import bcrypt
+### Connection to MySQL Data Base
 from flask_mysqldb import MySQL
+### Handling ambient variables
 import os
+### Handle environment variables in a .env environment
 from dotenv import load_dotenv
+### SMTP ptotocol for handling emails
 import smtplib
 from email.mime.text import MIMEText
+### Generating and verifying secure tokens
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
+### Rendering of some templates
 from jinja2 import Template
+### Custom log type
 from log_types import LogType
+### Handling authentication with google ID
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
+### Handling real time chat
 from flask_socketio import SocketIO, emit
+### Handlig AI API
 from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
+### To work with regular expressions
 import re
+### NLP processing
 from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
+### Handling dates and times
 from datetime import datetime, timedelta, timezone
+### Tokenisation 
 import tiktoken
+### Counter of occurrencies
 from collections import Counter
+### Creates default lists for each key
 from collections import defaultdict
 
+###-------------------------------------------------------------------------
 ### Configuration and Global Setup
-
+### Init
 app = Flask(__name__)
+### Set up SocketIO
 socketio = SocketIO(app, cors_allowed_origins="*", manage_session=True)
+### Load the environment
 load_dotenv()
 
+### Init keys
+### DeepSeek key
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
+### Google keys
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
+
+### Setting the key for the environment
 app.secret_key = os.getenv('SECRET_KEY', 'fallback-secret-key')
-app.config['MYSQL_HOST'] = os.getenv("MYSQL_HOST")  # host address of the database
+### Setting connection to the database
+app.config['MYSQL_HOST'] = os.getenv("MYSQL_HOST") 
 app.config['MYSQL_PORT'] = int(os.getenv("MYSQL_PORT"))  # host address of the database
 app.config['MYSQL_USER'] =  os.getenv("MYSQL_USER")  # username of the database
 app.config['MYSQL_PASSWORD'] = os.getenv("MYSQL_PASSWORD")  # password of the database
@@ -41,18 +71,21 @@ app.config['MYSQL_DB'] = os.getenv("MYSQL_DB")   # database name
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)  # session timeout
 MAX_TOKENS = 6000
 
+### Initialise MySQL with Flask app
 mysql = MySQL(app)
 
+### Create DeepSeek chat model
 deepseek_chat = ChatGroq(
     api_key=DEEPSEEK_API_KEY,
     model_name="deepseek-r1-distill-llama-70b"  # or "deepseek-r1-distill-llama-70b" if available
 )
 
-# Token serializer
+### Token serializer
 s = URLSafeTimedSerializer(app.secret_key)
 
-### A.Validators
-
+###-------------------------------------------------------------------------
+### Validators
+### Custom validator to check if username is already used in the Data Base
 def username_exists(form, field):
     cursor = mysql.connection.cursor()
     cursor.execute("SELECT id FROM users WHERE username = %s", (field.data,))
@@ -62,6 +95,7 @@ def username_exists(form, field):
     if existing_user:
         raise ValidationError('This username is already taken. Please choose another one.')
 
+### Custom validator to check if the email is already in use in the Data Base
 def email_exists(form, field):
     cursor = mysql.connection.cursor()
     cursor.execute("SELECT id FROM users WHERE email = %s", (field.data,))
@@ -71,7 +105,10 @@ def email_exists(form, field):
     if existing_email:
         raise ValidationError('This email is already taken.')
 
-### B.Forms
+###-------------------------------------------------------------------------
+### Forms
+
+### Resgistration form and all restrictions for the fields
 class RegistrationForm(FlaskForm):
     name = StringField('Name', validators=[DataRequired(), Length(min=2, max=50)])
     surname = StringField('Surname', validators=[DataRequired(), Length(min=2, max=50)])
@@ -83,11 +120,13 @@ class RegistrationForm(FlaskForm):
     gender = SelectField('Gender', choices=[], validate_choice=False)
     submit = SubmitField('Register')
 
+### Login form and all the restrictions for the fields
 class LoginForm(FlaskForm):
     username = StringField('Username', validators=[DataRequired(), Length(min=4, max=50)])
     password = PasswordField('Password', validators=[DataRequired(), Length(min=6, max=20)])
     submit = SubmitField('Login')
 
+### Edit profile form with all restriction on the fields 
 class EditProfileForm(FlaskForm):
     name = StringField('Name', validators=[DataRequired(), Length(min=2, max=50)])
     surname = StringField('Surname', validators=[DataRequired(), Length(min=2, max=50)])
@@ -99,36 +138,46 @@ class EditProfileForm(FlaskForm):
     submit = SubmitField('EditProfile')
     change_username = SubmitField('Change Username')
 
+### Forgot password form with all restrictions on the fields 
 class ForgotPasswordForm(FlaskForm):
     email = StringField('Email', validators=[DataRequired()])
     submit = SubmitField('Send Reset Link')
 
+### Reset Password Form with all restrictions on the fields 
 class ResetPasswordForm(FlaskForm):
     password = PasswordField('New Password', validators=[DataRequired(), Length(min=6)])
     confirm_password = PasswordField('Confirm Password', validators=[DataRequired(), Length(min=6)])
     submit = SubmitField('Reset Password')
 
+### Change username form with all restrictions on the fields
 class ChangeUsernameForm(FlaskForm):
     email = StringField('Email', validators=[DataRequired(), Length(max=50)])
     password = PasswordField('Password', validators=[DataRequired(), Length(min=6, max=20)])
     new_username = StringField('New Username', validators=[DataRequired(), Length(min=4, max=50)])
     submit = SubmitField('Change Username')
 
+### Contact form with all restrictions on the fields 
 class ContactForm(FlaskForm):
     name = StringField('Your Name', validators=[DataRequired(), Length(min=2, max=100)])
     email = StringField('Your Email', validators=[DataRequired(), Length(min=4, max=100)])
     message = TextAreaField('Message', validators=[DataRequired(), Length(min=10, max=1000)])
     submit = SubmitField('Send')
 
-### C.Utility Functions
+###-------------------------------------------------------------------------
+### Utility Functions
 
+### Function to count the tokens using tiktokens 
 def count_tokens(text):
     try:
+        ### Attempt to get the appropriate encoding for GPT-3.5 Turbo
         encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")  # veya en yakın olanı
     except KeyError:
+        ### If the model is not found, fall back to a base encoding
         encoding = tiktoken.get_encoding("cl100k_base")  # fallback
+    ### Return no of tokens
     return len(encoding.encode(text))
 
+### Function to load from the Data Base the list of countries
 def load_countries_from_db():
     cursor = mysql.connection.cursor()
     cursor.execute("SELECT code, name FROM countries ORDER BY name")
@@ -136,15 +185,19 @@ def load_countries_from_db():
     cursor.close()
     return [{"code": code, "name": name} for code, name in countries]
 
+### Parse country code to extended name of the country
 def get_country_name(country_code):
+    ### If input is empety return None
     if not country_code:
         return None    
     countries = load_countries_from_db()
     for country in countries:
         if country['code'] == country_code:
             return country['name']
+    ### If the code is not found it will be retuned the country_code itself
     return country_code
 
+### Function that ensures a working connection to the database, reconnecting if necessary
 def get_db_connection():
     conn = mysql.connection
     try:
@@ -153,6 +206,7 @@ def get_db_connection():
         conn = mysql.connect
     return conn
 
+### Function that based on the name of a product return an url to shop that product on google
 def get_google_shopping_url(product_name, category_name=None):
     query = product_name
     if category_name:
@@ -160,29 +214,37 @@ def get_google_shopping_url(product_name, category_name=None):
     query = query.replace(" ", "+")
     return f"https://www.google.com/search?tbm=shop&q={query}"
 
-### D.Logging & Tracking
+###-------------------------------------------------------------------------
+### Logging & Tracking
 
+### Returns the log type ID from the database based on an enum value
 def get_log_type_id(log_type: LogType):
     cursor = mysql.connection.cursor()
+    ### Query
     cursor.execute("SELECT log_type_id FROM log_types WHERE log_name = %s", (log_type.value,))
-    log_type_id = cursor.fetchone()
+    log_type_id = cursor.fetchone() # Get the log type ID from result
     
     cursor.close()
 
+    ### If log_type_id is found the function returns the ID
     if log_type_id:
         return log_type_id[0]
+    ### If log_type_id is not found the function print an error on the terminal and returns None
     else:
         print(f"Error: Log type {log_type.value} not found in log_types table.")
         return None
 
+### Function that inserts a int the Log (DB) an action
 def log_action(log_type: LogType, message, user_id=None):
     log_type_id = get_log_type_id(log_type)
     
+    ### Exit the function if log type is not valid
     if log_type_id is None:
         return
     
     cursor = mysql.connection.cursor()
 
+    ### Query
     cursor.execute("""
         INSERT INTO app_logs (user_id, log_type_id, message)
         VALUES (%s, %s, %s)
@@ -191,17 +253,23 @@ def log_action(log_type: LogType, message, user_id=None):
     mysql.connection.commit()
     cursor.close()
 
+### Logs an email event in the database, including status and any errors
 def log_email(template_name, recipient_email, subject, body, status="SUCCESS", error=None):
     cursor = mysql.connection.cursor()
+
+    ### Query
     cursor.execute("""
         INSERT INTO email_logs (template_name, recipient_email, subject, body, status, error_message)
         VALUES (%s, %s, %s, %s, %s, %s)
     """, (template_name, recipient_email, subject, body, status, error))
+
     mysql.connection.commit()
     cursor.close()
 
-### E.E-mail Handling
+###-------------------------------------------------------------------------
+### E-mail Handling
 
+###  Fetches the subject and body of an email template from the database
 def get_email_template(template_name):
     cursor = mysql.connection.cursor()
     cursor.execute("SELECT subject, body FROM email_templates WHERE name = %s", (template_name,))

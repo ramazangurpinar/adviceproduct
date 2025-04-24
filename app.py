@@ -1496,7 +1496,7 @@ def login():
             error_message = "Invalid username or password."
 
     return render_template('login.html', form=form, error=error_message)
-
+ 
 @app.route('/login/google', methods=['POST'])
 def google_login():
     print("🔵 /login/google endpoint called")

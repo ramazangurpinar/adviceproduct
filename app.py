@@ -840,51 +840,70 @@ def handle_toggle_like(data):
 ###-------------------------------------------------------------------------
 ### SocketIO Events
 
+### Handles a real-time 'session_check' event from the client.
 @socketio.on("session_check")
+### Function for checking the session
 def handle_session_check():
     print("✅ WebSocket connection built.")
     print("📦 Session:")
+    ### Print labels and values of the session
     for key, value in session.items():
         print(f"  {key}: {value}")
 
+### Handles a real-time 'localstorage_sync' event from the client.
 @socketio.on("localstorage_sync")
+### Function for syncing localStorage data with the server
 def handle_localstorage_sync(data):
+    ### Getting data from the session and saving them in local variables
     key = data.get("key")
     value = data.get("value")
     action = data.get("action")
     user_id = session.get("user_id")
 
+    ### Terminal output
     print(f"🛰️ localStorage sync from user_id {user_id} — {action.upper()} → {key} = {value}")
 
-    if key == "conversation_id":
+    ### Check if the key is "conversation_id" and if action is "set" or "remove"
+    if key == "conversation_id":    
+        ### If action is "set"
         if action == "set":
+            ### Set the conversation_id in the session with "value" casted to int
             session["conversation_id"] = int(value)
             print(f"✅ conversation_id set in session from localStorage: {value}")
+        ### If action is "remove"
         elif action == "remove":
             print(f"🧹 conversation_id removed from session due to localStorage removal. (previous value: {value})")
+            ### Remove conversation_id from the session
             session.pop("conversation_id", None)
 
+### Listens for incoming user messages sent via websocket
 @socketio.on("user_message")
+### Function that handles user messages
 def handle_user_message(data):
     print(f"🟡 handle_user_message called with data: {data}")
+    ### Saving cleaned user message in user_text
     user_text = data.get("content", "").strip()
+    ### Saveing user_id from the session
     user_id = session.get("user_id")
     
+    ### If user_id is not found, emit an info message to the frontend
     if not user_id:
         emit("info_message", {"content": "User session not found. Please log in again."})
         return
 
+    ### If user_id is not empty save conversation_id from the session variable
     conversation_id = session.get("conversation_id")
 
-    # ✅ If there's no conversation ID in the session, start a new one
-    # (localStorage will also sync it to the backend, if present)
+    ### If there's no conversation ID in the session, start a new one
     if not conversation_id:
         conversation_id = start_new_conversation(user_id, title="Chat Session")
 
     else:
-        # ⏰ Check if the conversation has expired (e.g., 30 mins of inactivity)
+        ### Check if the conversation has expired (30 minutes of inactivity)
         if is_conversation_expired(conversation_id, minutes=30):
+            ### Closing the conversation
             end_conversation(conversation_id)
+            ### Saving log
             log_action(
                 LogType.CONVERSATION_TIMEOUT,
                 f"Conversation {conversation_id} expired and was ended due to inactivity.",
@@ -893,48 +912,56 @@ def handle_user_message(data):
             conversation_id = start_new_conversation(user_id, title="New Chat After Timeout")
             emit("info_message", {"content": "Your chat session has expired. A new conversation has been started."})
 
-    # 🔁 Update session with the valid conversation_id
+    ### Update session with the valid conversation_id
     session["conversation_id"] = conversation_id
 
-    # 💬 Save user's message to the database
+    ### Save user's message to the database
     save_message(conversation_id, 'user', user_text)
 
-    # 🗝️ Extract and update conversation keywords
+    ### Extract conversation keywords
     new_keywords = extract_keywords(user_text)
+    ### Update conversation keywords in the database
     update_conversation_keywords(conversation_id, new_keywords)
+    ### Save log for keywords extraction
     log_action(
         LogType.AI_KEYWORDS_EXTRACTED,
         f"Keywords extracted from message in conversation {conversation_id}: {', '.join(new_keywords)}",
         user_id=user_id
     )
-    # ⏱️ Update last activity timestamp for session timeout tracking
+
+    ### Update last activity timestamp for session timeout tracking
     update_last_activity(conversation_id)
 
-    # 👤 Fetch user context (age, gender, country, keywords, etc.)
+    ### Fetch user context (age, gender, country, keywords, etc.)
     user_context = get_user_context(user_id, conversation_id)
 
-    # 🤖 Get AI assistant's response based on conversation history and user context
+    ### Get AI assistant's response based on conversation history and user context
     conversation_history = get_conversation_history(conversation_id)
     bot_reply, structured = ask_deepseek(user_text, user_context, conversation_history)
 
-    # 💾 Save bot's reply to the database
+    ### Save bot's reply to the database
     save_message(conversation_id, 'bot', bot_reply)
 
     cursor = mysql.connection.cursor()
+    ### Query to get the last inserted message ID
     cursor.execute("SELECT LAST_INSERT_ID()")
     message_id = cursor.fetchone()[0]
     cursor.close()    
 
+    ### Save log for bot's reply
     log_action(
         LogType.AI_REPLY_GENERATED,
         f"AI generated a reply in conversation {conversation_id}. Message ID: {message_id}",
         user_id=user_id
     )
 
-    # 🚀 Send bot's reply to frontend in real-time
+    ### Send bot's reply to frontend in real-time
     if structured:
+        ### Save product suggestions to the database
         save_product_suggestions(user_id, conversation_id, message_id, structured)
+        ### Generate a title if needed
         try_generate_title_if_needed(conversation_id)
+        ### Send structured product suggestions to the frontend
         emit("bot_reply", {
             "products": structured,
             "message_id": message_id,
@@ -942,6 +969,7 @@ def handle_user_message(data):
             "user_id": user_id
         })
     else:
+        ### Sends plain text response if there are no structured suggestions
         emit("bot_reply", {
             "content": bot_reply,
             "message_id": message_id,
@@ -949,7 +977,8 @@ def handle_user_message(data):
             "user_id": user_id
         })
 
-### K.Category Matching & Resolution
+###------------------------------------------------------------------------
+### Category Matching & Resolution
 
 def resolve_category_id_from_path(path):
     print(f"🔍 Resolving category ID from path: {path}")

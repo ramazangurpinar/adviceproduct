@@ -1370,34 +1370,41 @@ def end_chat():
     ### If conversation_id is not found, redirect to index
     if not conversation_id:
         return redirect(url_for('index'))
-    ### Try 
     try:
+        ### Set conversation status to inactive
         update_conversation_status(conversation_id, 0)
+        ### Log a final system message from the bot to inform the user that the conversation has ended
         save_message(conversation_id, 'bot', 'Conversation ended.')
         log_action(
             LogType.CONVERSATION_ENDED,
             f"Conversation ended with ID: {conversation_id}",
             user_id=session.get("user_id")
         )
+        ### Generate a title for the conversation using AI
         final_title = generate_ai_title_from_keywords(conversation_id)
         print("Generated Title:", final_title)
+        ### Update the conversation title in the database
         update_conversation_title(conversation_id, final_title)        
-        
+        ### Redirection to index page
         return redirect(url_for('index'))
+    ### Catch exceptions and print error message end redirect to 404 page
     except Exception as e:
         print(f"Error ending conversation: {e}")
         return redirect(url_for('404'))
 
 ### 3.Favourites & Product Detail
-
+### Route for favourites
 @app.route('/favourites')
+### Function called when favourites is requested
 def favourites():
+    ### Check if user is logged in
     if 'user_id' not in session:
+        ### If not, redirect to login page
         return redirect(url_for('login'))
-
+    ### Get user_id from session in local variable
     user_id = session['user_id']
     cursor = mysql.connection.cursor()
-
+    ### Query to get the liked product suggestions for the user
     cursor.execute("""
         SELECT ps.id, ps.product_name, ps.product_description, 
                c.title AS conversation_title, c.created_at,
@@ -1408,17 +1415,18 @@ def favourites():
         WHERE ps.user_id = %s AND ps.liked = 1
         ORDER BY c.created_at DESC, m.sent_at DESC
     """, (user_id,))
-
+    ### Save result of the query in rows
     rows = cursor.fetchall()
     cursor.close()
-
+    ### Group products preferences
     grouped_products = defaultdict(lambda: {
         "title": "",
         "created_at": "",
         "products": []
     })
-
+    ### for each eleement in rows
     for row in rows:
+        ### Unpacking the row in local variables
         product_id = row[0]
         product_name = row[1]
         product_description = row[2]
@@ -1435,16 +1443,23 @@ def favourites():
             "description": product_description,
             "sent_at": message_sent_at
         })
-
+    ### Render the template with the grouped products
     return render_template("favourites.html", grouped_products=grouped_products)
 
+### Route for product detail
 @app.route('/product/<int:product_id>')
+### Function called when product/int is requested
 def product_detail(product_id):
+    ### Check if user is logged in
     if 'user_id' not in session:
+        ### If not, redirect to login page
         return redirect(url_for('login'))
-
+    
+    ### Unpacking user_id from session
     user_id = session['user_id']
+
     cursor = mysql.connection.cursor()
+    ### Query to get the product details
     cursor.execute("""
         SELECT ps.product_name, ps.product_description, c.title, m.sent_at, 
                ps.category_id, cat.name AS category_name
@@ -1454,12 +1469,13 @@ def product_detail(product_id):
         LEFT JOIN categories cat ON ps.category_id = cat.id
         WHERE ps.id = %s AND ps.user_id = %s
     """, (product_id, user_id))
+    ### Save result of the query in row
     row = cursor.fetchone()
     cursor.close()
-
+    ### If no product is found, return 404
     if not row:
         return "Product not found", 404
-
+    ### Unpacking the row in local variables
     product = {
         "name": row[0],
         "description": row[1],
@@ -1468,167 +1484,206 @@ def product_detail(product_id):
         "category_id": row[4],
         "category_name": row[5]
     }
-
+    ### Log the product view
     log_action(
         LogType.PRODUCT_VIEWED,
         f"User viewed product: {product['name']}",
         user_id=user_id
     )
+    ### Create a Google Shopping URL for the product
     google_url = get_google_shopping_url(product["name"], product.get("category_name"))
+    ### Get the category path by ID
     category_path = get_category_path_by_id(product["category_id"]) if product["category_id"] else None
+    ### Render the product detail template
     return render_template("product_detail.html", product=product, product_id=product_id, google_url=google_url,category_path=category_path)
 
 ### 4.Conversation Title Management
 
+### Route for editing conversation title
 @app.route("/generate_title/<int:conversation_id>", methods=["POST"])
+### Function called when generate_title is requested by the user
 def generate_title(conversation_id):
+    ### Get user_id from session
     user_id = session.get("user_id")
+    ### Check if user is logged in
     if not user_id:
         return redirect(url_for("login"))
 
+    ### Get the conversation title from the conversation ID
     title = generate_ai_title_from_keywords(conversation_id)
+    ### Update the conversation title in the database
     update_conversation_title(conversation_id, title)
+    ### Log the title edit
     log_action(
         LogType.CONVERSATION_TITLE_EDITED,
         f"Title updated for conversation {conversation_id}: {title}",
         user_id=user_id
     )
+    
     return redirect(url_for("view_conversation", conversation_id=conversation_id))
 
 ### 5.Category Management
 
+### Route for getting the category tree
 @app.route("/api/categories/tree")
+### Function called when /api/categories/tree is requested
 def get_category_tree():
     cursor = mysql.connection.cursor()
+    ### Query to get all categories from the database
     cursor.execute("SELECT id, name, parent_id FROM categories")
+    ### Save result of the query in rows
     rows = cursor.fetchall()
     cursor.close()
-
+    ### Create a list of dictionaries for each category
     categories = [{"id": r[0], "name": r[1], "parent_id": r[2]} for r in rows]
 
-    # id -> category map
+    ### id -> category map
     category_map = {cat["id"]: {**cat, "children": []} for cat in categories}
+    ### Init list for root categories
     root_categories = []
-
+    ### For each category in categories if category has no parent_id add it to the root categories
     for cat in categories:
         if cat["parent_id"] is None:
             root_categories.append(category_map[cat["id"]])
         else:
             parent = category_map.get(cat["parent_id"])
+            ### If parent category is found, add the current category to its children
             if parent:
                 parent["children"].append(category_map[cat["id"]])
-
+    ### Sort the root categories by name
     return jsonify(root_categories)
 
+### Route for assigning category from product detail page
 @app.route('/assign-category/<int:product_id>', methods=['POST'])
+### Function called when assign-category is requested
 def assign_category_from_detail(product_id):
     print(f"🧾 Assigning category from detail page for product {product_id}")
-
+    ### Check if user is logged in
     if 'user_id' not in session:
-        print("⛔ Unauthorized access attempt.")
         return redirect(url_for('login'))
-
+    
     cursor = mysql.connection.cursor()
+    ### Query to get the product name and description
     cursor.execute("""
         SELECT product_name, product_description
         FROM product_suggestions
         WHERE id = %s AND user_id = %s
     """, (product_id, session["user_id"]))
+    ### Save result of the query in row
     row = cursor.fetchone()
     cursor.close()
-
+    ### if row ia empty, print an error message and return 404
     if not row:
-        print("❌ Product not found in DB.")
+        print("Product not found in DB.")
         return "Product not found", 404
-
+    ### Unpacking the row in local variables
     product_name, product_description = row
-    print(f"📦 Product: {product_name}")
 
-    # 🧠 Step-by-step AI prediction
+    ### Get the category path using the product name and description
     path = get_deep_category_path(product_name, product_description)
-    print("📌 Predicted Path:", path)
 
-    # 🆔 Resolve the final category ID
+    ### Get the category ID from the path
     category_id = resolve_category_id_from_path(path)
-
+    ### If category ID is found
     if category_id:
-        print(f"💾 Updating product_suggestions with category_id={category_id}")
+        print(f"Updating product_suggestions with category_id={category_id}")
         cursor = mysql.connection.cursor()
+        ### Query to update the category ID in the product_suggestions table
         cursor.execute("""
             UPDATE product_suggestions SET category_id = %s WHERE id = %s
         """, (category_id, product_id))
         mysql.connection.commit()
         cursor.close()
-
+        ### Log the category assignment
         log_action(
             LogType.CATEGORY_PREDICTED,
             f"Auto-assigned category {category_id} to product '{product_name}' via product detail page.",
             user_id=session.get("user_id")
         )
+        ### Terminal output
         print("✅ Category assignment successful.")
     else:
+        ### Log the failure
         log_action(
             LogType.CATEGORY_ASSIGNMENT_FAILED,
             f"Failed to assign category to product '{product_name}' (ID: {product_id}). Path: {path}",
             user_id=session.get("user_id")
         )
-
+    ### Redirect to the product detail page
     return redirect(url_for("product_detail", product_id=product_id))
 
+### Route for showing the category tree
 @app.route("/categories")
+### Function called when categories is requested
 def show_categories():
+    ### Reneder the category tree template
     return render_template("category_tree.html")
 
+### Route for manual category assignment
 @app.route('/product/<int:product_id>/manual-category', methods=['GET', 'POST'])
+### Function called when manual-category is requested
 def manual_category_assign(product_id):
+    ### Check if user is logged in
     if 'user_id' not in session:
+        ### If not, redirect to login page
         return redirect(url_for('login'))
 
     cursor = mysql.connection.cursor()
 
-    # Fetch the product name and current category_id
+    ### Fetch the product name and current category_id
     cursor.execute("""
         SELECT product_name, category_id FROM product_suggestions
         WHERE id = %s AND user_id = %s
     """, (product_id, session['user_id']))
+    ### Save result of the query in row
     row = cursor.fetchone()
-
+    ### If no row is found, close the cursor and return 404
     if not row:
         cursor.close()
         return "Product not found or unauthorized", 404
-
+    ### Unpacking the row in local variables
     product_name = row[0]
     current_category_id = row[1]
 
-    # Retrieve all category IDs
+    ### Query to get all category IDs
     cursor.execute("SELECT id FROM categories")
+    ### Retrieve all category IDs
     category_ids = [r[0] for r in cursor.fetchall()]
 
-    # Build full path for each category ID
+    ### Build full path for each category ID
+    ### Empty list for categories
     categories = []
+    ### For each category ID in category_ids
     for cat_id in category_ids:
+        ### Get the full path of the category
         path = get_category_full_path(cat_id, cursor)
+        ### Add the category ID and path to the categories list
         categories.append((cat_id, path))
 
-    # Sort categories alphabetically by path
+    ### Sort categories alphabetically by path
     categories.sort(key=lambda x: x[1])
 
-    # If form is submitted
+    ### If the request method is POST
     if request.method == 'POST':
+        ### Get the selected category ID from the form
         selected_id = request.form.get('category_id')
+        ### If selected_id is not empty
         if selected_id:
+            ### Query update the category ID in the product_suggestions table
             cursor.execute("""
                 UPDATE product_suggestions
                 SET category_id = %s
                 WHERE id = %s
             """, (selected_id, product_id))
             mysql.connection.commit()
+            ### Log the category assignment
             log_action(
                 LogType.PRODUCT_CATEGORY_ASSIGNED_MANUAL,
                 f"Manually assigned category {selected_id} to product ID {product_id}.",
                 user_id=session.get("user_id")
             )            
             cursor.close()
+            ### Redirect to the product detail page
             return redirect(url_for('product_detail', product_id=product_id))
 
     cursor.close()
@@ -1642,6 +1697,7 @@ def manual_category_assign(product_id):
         selected_id=current_category_id
     )
 
+###-----------------------------------------------------------------
 ### 6.User Registration & Authentication
 
 @app.route('/register', methods=['GET', 'POST'])

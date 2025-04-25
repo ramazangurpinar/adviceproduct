@@ -1700,19 +1700,26 @@ def manual_category_assign(product_id):
 ###-----------------------------------------------------------------
 ### 6.User Registration & Authentication
 
+### Route for user registration
 @app.route('/register', methods=['GET', 'POST'])
+### Function called when register is requested
 def register():
-    countries = load_countries_from_db()    
+    ### Get country list from the database
+    countries = load_countries_from_db()
+    ### Delete session variables if they exist
     session.pop('user_id', None)  
     session.pop('username', None)
     session.pop('name', None)  
     session.pop('surname', None)
+    ### Create a new RegistrationForm instance
     form = RegistrationForm()
     form.submit.label.text = "Sign Up"
     form.country.choices = [('', '-- Select --')] + [(c["code"], c["name"]) for c in countries] 
     form.gender.choices = [('', '-- Select --'), ('male', 'Male'), ('female', 'Female'), ('other', 'Other')]
 
+    ### If the request method is POST
     if form.validate_on_submit():
+        ### Save instnace variables of the form in local variables
         name = form.name.data
         surname = form.surname.data
         username = form.username.data
@@ -1721,10 +1728,11 @@ def register():
         country = form.country.data or None
         age = form.age.data or None
         gender = form.gender.data or None
-
+        ### Encrypt password using bcrypt
         hashed_password = bcrypt.hashpw(password.encode('utf-8'),bcrypt.gensalt())
 
         cursor = mysql.connection.cursor()
+        ### Insert new user into the database
         cursor.execute("INSERT INTO users (name, surname, username, email, password, country, age, gender) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
         (name, surname, username, email, hashed_password, country, age, gender))
 
@@ -1734,40 +1742,51 @@ def register():
         user = cursor.fetchone()
         cursor.close()
 
-        # Session Creation
+        ### Session Creation
         session['user_id'] = user[0]
         session['username'] = username
         session['name'] = name
         session['surname'] = surname
         session.permanent = True        
-
+        ### Log the user registration
         log_action(LogType.USER_REGISTERED, f"New user registered: {username}", user_id=user[0])
         send_email_from_template("WELCOME", email, {"username": username,"name": name})
+        ### Redirect to the registration success page
         return redirect(url_for('register_success'))
-
     return render_template('register.html', form=form)
 
+### Route for registration success
 @app.route('/register-success')
+### Function called when register-success is requested
 def register_success():
+    ### If session variable 'username' is not found, redirect to login page
     if 'username' not in session:
         return redirect(url_for('login'))
+    ### Render registration success page
     return render_template('register_success.html', username=session['username'])
 
+### Route for user login
 @app.route('/login', methods=['GET', 'POST'])
+### Function called when login is requested
 def login():
+    ### Create a new LoginForm instance
     form = LoginForm()
+    ### Set error message to None
     error_message = None
+    ### If username is found in session variables redirect to index page
     if 'username' in session:
        return redirect(url_for('index'))
-
     if form.validate_on_submit():
+        ### unpack form variables in local variables
         username = form.username.data
         password = form.password.data
 
         cursor = mysql.connection.cursor()
+        ### Query to get the user information from the database
         cursor.execute("SELECT id, username, password, name, surname FROM users WHERE username = %s", (username,))
         user = cursor.fetchone()
         cursor.close()
+        ### If user is found and the password matches
         if user and bcrypt.checkpw(password.encode('utf-8'), user[2].encode('utf-8')):  
             session['user_id'] = user[0]
             session['username'] = user[1]
@@ -1776,35 +1795,43 @@ def login():
             session['is_google_user'] = False
             session['is_admin'] = (user[1].lower() == "admin")
             session.permanent = True
+            ### Log the user login
             log_action(LogType.USER_LOGGED_IN, f"User logged in: {username}", user_id=user[0])
+            ### Redirect to the index page
             return redirect(url_for('index'))
         else:
+            ### Log the failed login attempt
             log_action(LogType.LOGIN_FAILED, f"Login failed for username: {username}")
+            ### Set error message
             error_message = "Invalid username or password."
-
+    ### render the login template with the form and error message
     return render_template('login.html', form=form, error=error_message)
  
+ ### Route for Google login
 @app.route('/login/google', methods=['POST'])
+### Function called when /login/google is requested
 def google_login():
+    ### Terminal output
     print("🔵 /login/google endpoint called")
 
     try:
+        ### Get the Google ID token from the request
         token = request.json.get('token')
-
+        ### Verify the Google ID token
         id_info = id_token.verify_oauth2_token(
             token,
             google_requests.Request(),
             GOOGLE_CLIENT_ID
         )
         print("✅ Google ID token verified")
-
+        ### get user information from the token
         email = id_info.get('email')
         first_name = id_info.get('given_name', '')
         last_name = id_info.get('family_name', '')
 
         print("📧 Email:", email)
         print("👤 First Name:", first_name, " | Last Name:", last_name)
-
+        ### If first_name or last_name is not found
         if not first_name or not last_name:
             full_name = id_info.get('name', '')
             name_parts = full_name.split(' ', 1)
@@ -1812,27 +1839,28 @@ def google_login():
             last_name = last_name or (name_parts[1] if len(name_parts) > 1 else '')
             print("🔁 Fallback name parts used")
 
-        # Use a consistent connection object
         conn = mysql.connection
         cursor = conn.cursor()
 
-        # Check if user exists
+        ### Query to check if the user already exists in the database
         cursor.execute("SELECT id, username, name, surname FROM users WHERE email = %s", (email,))
+        ### Save result of the query in existing_user
         existing_user = cursor.fetchone()
         print("🔍 Existing user:", existing_user)
-
+        ### if user exists set session variables
         if existing_user:
             print("✅ User exists. Creating session...")
             session['user_id'] = existing_user[0]
             session['username'] = existing_user[1]
             session['name'] = existing_user[2]
             session['surname'] = existing_user[3]
+        ### If user does not exist, create a new username
         else:
             print("🆕 New user. Creating username...")
             base_username = email.split('@')[0]
             username = base_username
             counter = 1
-
+            ### Enter an infinite loop that will break once a unique username is found
             while True:
                 cursor.execute("SELECT id FROM users WHERE username = %s", (username,))
                 if not cursor.fetchone():
@@ -1841,7 +1869,7 @@ def google_login():
                 counter += 1
 
             print("✅ Username finalized:", username)
-
+            ### Query to insert the new user into the database
             cursor.execute("""
                 INSERT INTO users (name, surname, username, email, country, age, gender)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
@@ -1851,29 +1879,30 @@ def google_login():
 
             conn.commit()
             print("💾 Commit complete.")
-
+            ### Send a welcome email to the new user
             try:
                 send_email_from_template("GOOGLE_LOGIN", email, {"username": username})
                 print("📧 Welcome email sent")
             except Exception as e:
                 print("⚠️ Email send error:", e)
-
+            ### Query to get the new user ID
             cursor.execute("SELECT id FROM users WHERE email = %s", (email,))
             new_user = cursor.fetchone()
             print("🆔 New user ID fetched:", new_user)
-
+            ### If new user ID is not found, print an error message
             if not new_user:
                 print("❌ User insert failed!")
+                ### Retunn error
                 return jsonify({'error': 'User insert failed'}), 500
-
+            ### Set session variables for the new user
             session['user_id'] = new_user[0]
             session['username'] = username
             session['name'] = first_name
             session['surname'] = last_name
-
+        ### Set session variables for Google user
         session['is_google_user'] = True
         session.permanent = True
-
+        ### Log the Google login
         log_action(
             LogType.GOOGLE_LOGIN,
             f"User logged in via Google: {session['username']}",
@@ -1882,8 +1911,9 @@ def google_login():
 
         cursor.close()
         print("✅ Google login completed successfully")
+        ### Redirect to the index page
         return jsonify({'redirect': url_for('index')})
-
+    ### Exception handling
     except ValueError:
         print("❌ Invalid Google ID token")
         return jsonify({'error': 'Invalid Google ID token'}), 400
@@ -1892,60 +1922,82 @@ def google_login():
         print(f"❌ Google OAuth Error: {str(e)}")
         return jsonify({'error': 'Authentication failed'}), 500
 
+### Route for user logout
 @app.route('/logout')
+### Function called when logout is requested
 def logout():
+    ### Log the user logout
     log_action(LogType.USER_LOGGED_OUT, f"User logged out: {session.get('username', 'unknown')}", user_id=session.get('user_id'))
+    ### Delete session variables
     session.pop('user_id', None)  
     session.pop('username', None) 
     session.pop('name', None) 
     session.pop('surname', None)
     session.pop('is_google_user', None)
     session.pop('is_admin', None)
+    ### Redirect to the firstpage page
     return render_template('firstpage.html')
 
+###-------------------------------------------------
 ### 7.Profile Management
 
+### Route for user profile
 @app.route('/profile')
+### Function called when profile is requested
 def profile():
+    ### Check if user is logged in
     if 'user_id' not in session:
         return redirect(url_for('index')) 
-
+    ### Unpacking user_id from session
     user_id = session['user_id']
 
     cursor = mysql.connection.cursor()
+    ### Query to get the user information from the database
     cursor.execute("SELECT username, country, name, surname, age, gender, email FROM users WHERE id = %s", (user_id,))
+    ### Save result of the query in user
     user = cursor.fetchone()
     cursor.close()
-
+    ### If user is not found, return 404
     if not user:
         return "User not found!", 404
 
+    ### Unpacking the user information in local variables
     user = list(user)
     user[1] = get_country_name(user[1])
     user[5] = user[5].capitalize() if user[5] else None
+    ### Render the profile template with the user information
     return render_template('profile.html', user=user)
 
+### Route for editing user profile
 @app.route('/edit_profile', methods=['GET', 'POST'])
+### Function called when edit_profile is requested
 def edit_profile():
+    ### Check if user is logged in
     if 'user_id' not in session:
         return redirect(url_for('login'))
+    ### Get user_id from session
     user_id = session['user_id']
+    ### Get country list from the database
     countries = load_countries_from_db()
+    ### Init a new EditProfileForm instance
     form = EditProfileForm() 
     form.country.choices = [('', '-- Select --')] + [(c["code"], c["name"]) for c in countries]
     form.gender.choices = [('', '-- Select --'), ('male', 'Male'), ('female', 'Female'), ('other', 'Other')]
 
     cursor = mysql.connection.cursor()
 
+    ### If the request method is GET
     if request.method == 'GET':
         print("GET Request")
+        ### Query to get the user information from the database
         cursor.execute("SELECT name, surname, country, age, gender, email, username FROM users WHERE id = %s", (user_id,))
+        ### Save result of the query in user_data
         user_data = cursor.fetchone()
         cursor.close()
-
+        ### If user_data is empty, return 404
         if not user_data:
             return "User not found", 404
-
+        ### Render the user data on the form
         form.name.data = user_data[0]
         form.surname.data = user_data[1]
         form.country.data = user_data[2]
@@ -1953,15 +2005,16 @@ def edit_profile():
         form.gender.data = user_data[4]
         form.email.data = user_data[5]
         form.username.data = user_data[6]
-
+    ### If for is valid
     elif form.validate_on_submit():
+        ### Unpacking form variables in local variables
         name = form.name.data
         surname = form.surname.data
         email = form.email.data
         country = form.country.data or None
         age = int(form.age.data) if form.age.data else None
         gender = form.gender.data or None        
-
+        ### Query to update the user information in the database
         cursor.execute("""
             UPDATE users 
             SET name = %s, surname = %s, country = %s, age = %s, gender = %s, email = %s
@@ -1969,243 +2022,310 @@ def edit_profile():
         """, (name, surname, country, age, gender, email, user_id))
         mysql.connection.commit()
         cursor.close()
-
+        ### Update session variables
         session['name'] = name
         session['surname'] = surname
+        ### Log the user profile update
         log_action(LogType.USER_UPDATED, f"User updated their profile: {session['username']}", user_id=session['user_id'])
+        ### Reload profile page
         return redirect(url_for('profile'))
-
+    ### Render the edit profile template with the form
     return render_template('edit_profile.html', form=form)
 
+### Route for changing username
 @app.route('/change-username', methods=['GET', 'POST'])
+### Function called when change-username is requested
 def change_username():
+    ### Check if user is logged in
     if 'user_id' not in session:
         return redirect(url_for('login'))
-
+    ### Check if user is a Google user (Logged in with Google)
     if session.get('is_google_user'):
         return "Google users cannot change their username.", 403
     
+    ### Form instance
     form = ChangeUsernameForm()
+    ### Set error message to None
     error_message = None
 
     if form.validate_on_submit():
+        ### Unpacking form variables in local variables
         email = form.email.data
         password = form.password.data
         new_username = form.new_username.data
         user_id = session['user_id']
 
         cursor = mysql.connection.cursor()
+        ### Query to get the user information from the database
         cursor.execute("SELECT email, password, username FROM users WHERE id = %s", (user_id,))
+        ### Save result of the query in user
         user = cursor.fetchone()
-
+        ### if user is not found close the cursor and set error message
         if not user:
             cursor.close()
             error_message = "User not found."
+        ### If user is found
         else:
+            ### Unpacking the user information in local variables
             user_email, hashed_pw, current_username = user
+            ### Check if the email and password match
             if email != user_email or not bcrypt.checkpw(password.encode('utf-8'), hashed_pw.encode('utf-8')):
                 cursor.close()
+                ### Set error message
                 error_message = "Invalid email or password."
             else:
-                # New username is already taken by another user
+                ### Query to check if the new username is already taken
                 cursor.execute("SELECT id FROM users WHERE username = %s", (new_username,))
                 if cursor.fetchone():
                     cursor.close()
+                    ### Set error message
                     error_message = "Username already taken."
                 else:
+                    ### Update the username in the database if it is available
                     cursor.execute("UPDATE users SET username = %s WHERE id = %s", (new_username, user_id))
                     mysql.connection.commit()
                     cursor.close()
 
-                    # Send email to confirm username change
+                    ### Send email to confirm username change
                     send_email_from_template("USERNAME_CHANGED", email, {
                         "old_username": current_username,
                         "new_username": new_username
                     })
 
-                    # Log the username change action
+                    ### Log the username change action
                     log_action(LogType.USERNAME_CHANGED,
                                f"Username changed from {current_username} to {new_username}",
                                user_id=user_id)
-
+                    ### Update session variables username
                     session['username'] = new_username
-
+                    ### Redirect to the profile page
                     return redirect(url_for('profile'))
-
+    
     return render_template('change_username.html', form=form, error=error_message)
 
+### Route for deleting user profile
 @app.route('/delete_profile', methods=['POST'])
+### Function called when delete_profile is requested
 def delete_profile():
-    # Redirect to login if user is not logged in
+    ### Redirect to login if user is not logged in
     if 'user_id' not in session:
         return redirect(url_for('login'))
-
+    ### Get user_id and username from session
     user_id = session.get('user_id')
     username = session.get('username', 'unknown')
 
     cursor = mysql.connection.cursor()
 
-    # Retrieve user information (name, surname, email) before deleting
+    ### Retrieve user information (name, surname, email) before deleting
     cursor.execute("SELECT name, surname, email FROM users WHERE id = %s", (user_id,))
+    ### Save result of the query in user_info
     user_info = cursor.fetchone()
-
+    ### If user_info is not empty
     if user_info:
+        ### Unpacking the user information in local variables
         name, surname, email = user_info
 
-        # Delete the user account
+        ### Delete the user account
         cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
         mysql.connection.commit()
 
-        # Send an account deletion confirmation email to the user
+        ### Send an account deletion confirmation email to the user
         variables = {
             "name": name,
             "surname": surname,
             "username": username
         }
+        ### Send email to confirm account deletion
         send_email_from_template("ACCOUNT_DELETED", email, variables)
 
-        # Log the account deletion action
+        ### Log the account deletion action
         log_action(LogType.USER_DELETED, f"User deleted their account: {username} (ID: {user_id})", user_id=user_id)
 
     cursor.close()
     session.clear()
 
-    # Redirect the user to the login page after deletion
+    ### Redirect the user to the login page after deletion
     return redirect(url_for('login'))
 
+###-------------------------------------------------
 ### 8.Password Reset
 
+### Route for password reset
 @app.route('/forgot-password', methods=['GET', 'POST'])
+### Function called when forgot-password is requested
 def forgot_password():
+    ### Init a new ForgotPasswordForm instance
     form = ForgotPasswordForm()
+    ### Set message to None
     message = None
+
     if form.validate_on_submit():
+        ### Get email from the form
         email = form.email.data
         cursor = mysql.connection.cursor()
+        ### Query to get the user information from the database
         cursor.execute("SELECT id, password FROM users WHERE email = %s", (email,))
+        ### Save result of the query in user
         user = cursor.fetchone()
         cursor.close()
 
+        ### If user is found
         if user:
+            ### Unpacking the user information in local variables
             user_id, password_hash = user
 
-            # Prevent Google users from resetting password
+            ### Prevent Google users from resetting password
             if password_hash is None:
+                ### Set message
                 message = "Google users cannot reset password. Please use Google Sign-In to log in."
                 return render_template('forgot_password.html', form=form, message=message)
-
+            ### Generate a password reset token
             try:
+                ### Create token
                 token = s.dumps(email, salt='email-reset')
+                ### Create a password reset URL
                 reset_url = url_for('reset_password', token=token, _external=True)
+                ### Send password reset email
                 send_email_from_template("RESETPASSWORD", email, {"reset_url": reset_url})
+                ### Log the password reset action
                 log_action(LogType.PASSWORD_RESET_LINK_SENT, f"Password reset link sent to: {email}", user_id=user_id)
+                ### Set message
                 message = "A password reset link has been sent to your email."
+            ### Exception handling
             except Exception as e:
+                ### Log the error
                 log_action(LogType.PASSWORD_RESET_FAILED, f"Password reset failed for email: {email}. Error: {str(e)}", user_id=user_id)
+                ### Set message
                 message = "An error occurred while sending the password reset link. Please try again later."
 
         else:
             message = "If this email is registered, a reset link has been sent."
-
+    ### Render the forgot password template with the form and message
     return render_template('forgot_password.html', form=form, message=message)
 
+### Route for resetting password (token)
 @app.route('/reset-password/<token>', methods=['GET', 'POST'])
+### Function called when reset-password is requested
 def reset_password(token):
     try:
-        email = s.loads(token, salt='email-reset', max_age=3600)  # 1 hour
+        email = s.loads(token, salt='email-reset', max_age=3600)  ### 1 hour
     except SignatureExpired:
+        ### Log the token expiration
         log_action(LogType.TOKEN_INVALID, "Password reset token expired.")
+        ### Return error message
         return "The reset link has expired.", 403
     except BadSignature:
+        ### Log the invalid token
         log_action(LogType.TOKEN_INVALID, "Invalid or tampered password reset token.")
+        ### Return error message
         return "Invalid or tampered link.", 403
 
-    # Check if the user is a Google account user
     cursor = mysql.connection.cursor()
+    ### Query to get the user information from the database
     cursor.execute("SELECT id, password FROM users WHERE email = %s", (email,))
+    ### Save result of the query in user
     user = cursor.fetchone()
     cursor.close()
 
+    ### If user is not found, return 404
     if not user:
         return "User not found.", 404
-
+    ### Unpacking the user information in local variables
     user_id, password_hash = user
-
+    ### Prevent Google users from resetting password
     if password_hash is None:
         return "Google users cannot reset password.", 403
-
+    ### Init a new ResetPasswordForm instance
     form = ResetPasswordForm()
     if form.validate_on_submit():
+        ### Unpacking form variables in local variables
         password = form.password.data
         confirm_password = form.confirm_password.data
 
+        ### Check if password and confirm password match
         if password != confirm_password:
+            ### Set error message unmatching passwords
             return render_template('reset_password.html', form=form, error="Passwords do not match.")
-
+        ### Encrypt the new password using bcrypt
         hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
 
         cursor = mysql.connection.cursor()
+        ### Query to update the password in the database
         cursor.execute("UPDATE users SET password = %s WHERE id = %s", (hashed_password, user_id))
         mysql.connection.commit()
-
+        ### Query to get the user information from the database
         cursor.execute("SELECT username, name, surname FROM users WHERE id = %s", (user_id,))
+        ### Save result of the query in user_data
         user_data = cursor.fetchone()
         cursor.close()
-
+        ### if user_data is not empty
         if user_data:
+            ### Unpacking the user information in local variables
             username, name, surname = user_data
+            ### Setting session variables
             session['user_id'] = user_id
             session['username'] = username
             session['name'] = name
             session['surname'] = surname
             session['is_google_user'] = False
             session.permanent = True
-
+            ### Send email to confirm password change
             send_email_from_template("PASSWORDCHANGED", email, {"username": username})
+            ### Log the password change action
             log_action(LogType.PASSWORD_CHANGED, f"Password successfully changed for user: {username}", user_id=user_id)
-
+        ### Redirect to the index page
         return redirect(url_for('index'))
-
     return render_template('reset_password.html', form=form)
 
+###--------------------------------------------------
 ### 9.Contact / Help
 
+### Route for contact form
 @app.route('/contact', methods=['GET', 'POST'])
+### Function called when contact is requested
 def contact():
+    ### Init a new ContactForm instance
     form = ContactForm()
-
     if form.validate_on_submit():
+        ### Unpacking form variables in local variables
         name = form.name.data
         email = form.email.data
         message = form.message.data
-
         variables = {
             "name": name,
             "email": email,
             "message": message
         }
-
+        ### Send email using the contact form template
         success = send_email_from_template("CONTACT_FORM", email, variables)
-
+        ### If email is sent successfully
         if success:
+            ### Redirect to the contact success page
             return redirect(url_for('contact_success'))
 
     return render_template('contact.html', form=form)
 
+### Route for contact success page
 @app.route('/contact-success')
+### Function called when contact-success is requested
 def contact_success():
+    ### Render the contact success template
     return render_template('contact_success.html')
 
-
+###-------------------------------------------------
 ### 10.Logging & Admin Monitoring
 
+
+### Route for viewing logs
 @app.route('/logs')
+### Function called when logs is requested
 def view_logs():
+    ### Getting user_id and is_admin from session
     user_id = session.get("user_id")
     is_admin = session.get("is_admin")
 
     cursor = mysql.connection.cursor()
-
+    ### If user is admin, fetch all logs
     if is_admin:
         cursor.execute("""
             SELECT 
@@ -2222,6 +2342,7 @@ def view_logs():
             ORDER BY 
                 al.timestamp DESC;
         """)
+    ### If user is not admin, fetch only their logs
     else:
         cursor.execute("""
             SELECT 
@@ -2240,21 +2361,24 @@ def view_logs():
             ORDER BY 
                 al.timestamp DESC;
         """, (user_id,))
-
+    ### Save result of the query in logs
     logs = cursor.fetchall()
     cursor.close()
 
     columns = ['id', 'user_id', 'message', 'timestamp', 'log_name', 'isActive']
+    ### Render logs
     return render_template("logs.html", logs=[dict(zip(columns, row)) for row in logs])
 
-
+### Route for viewing email logs
 @app.route("/email-logs")
+### Function called when email-logs is requested
 def email_logs():
+    ### Save user_id and is_admin from session
     user_id = session.get("user_id")
     is_admin = session.get("is_admin")
 
     cursor = mysql.connection.cursor()
-
+    ### If user is admin, fetch all email logs
     if is_admin:
         cursor.execute("""
             SELECT 
@@ -2269,10 +2393,11 @@ def email_logs():
             FROM email_logs
             ORDER BY sent_at DESC
         """)
+    ### If user is not admin, fetch only their email logs
     else:
         cursor.execute("SELECT email FROM users WHERE id = %s", (user_id,))
         user_email = cursor.fetchone()
-
+        ### If user_email is not found, close the cursor and return 404
         if not user_email:
             cursor.close()
             return "User email not found", 404
@@ -2300,9 +2425,9 @@ def email_logs():
     return render_template("email_logs.html", logs=logs)
 
 
-
+###--------------------------------------------------
 ### M.Main Entry Point
-
+### Main function to run the Flask application
 if __name__ == '__main__':
     app.run(debug=True)
     

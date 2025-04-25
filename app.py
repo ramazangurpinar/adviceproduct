@@ -980,50 +980,66 @@ def handle_user_message(data):
 ###------------------------------------------------------------------------
 ### Category Matching & Resolution
 
+### Function to resolve category ID from a given path
 def resolve_category_id_from_path(path):
+    ### Terminal output
     print(f"🔍 Resolving category ID from path: {path}")
+    ### If path is empty or None, print a warning and return None
     if not path:
+        ### Terminal output
         print("⚠️ No path provided.")
         return None
 
+    ### Split the path by ">" and strip whitespace
     parts = [p.strip() for p in path.split(">")]
     cursor = mysql.connection.cursor()
+    ### Set the initial parent_id to None
     current_parent_id = None
 
+    ### Iterate through each part of the path in parts
     for part in parts:
+        ### Terminal output
         print(f"➡️ Searching for category: {part} (parent_id={current_parent_id})")
+        ### Query to find the category ID based on name and parent_id
         cursor.execute("""
             SELECT id FROM categories
             WHERE name = %s AND (parent_id = %s OR (%s IS NULL AND parent_id IS NULL))
         """, (part, current_parent_id, current_parent_id))
+        ### save the result of the query
         result = cursor.fetchone()
+        ### If a category is found, update the current_parent_id
         if result:
             current_parent_id = result[0]
             print(f"✔️ Found category ID: {current_parent_id}")
+        ### If no category is found, print an error message on terminal and return None
         else:
             print(f"❌ Category not found for: {part}")
             cursor.close()
             return None
 
     cursor.close()
+    ### Terminal output category ID
     print(f"🏁 Final category ID: {current_parent_id}")
     return current_parent_id
 
+### Function to get the full category path from the database
 def get_deep_category_path(product_name, product_description):
+    ### Terminal output
     print("🚀 Starting step-by-step category path resolution")
 
     cursor = mysql.connection.cursor()
+    ### Query to get id and name of the categories where parent_id is NULL
     cursor.execute("SELECT id, name FROM categories WHERE parent_id IS NULL")
     level_categories = cursor.fetchall()
 
     path = []
     parent_id = None
-
+    ### Loop until there are no more categories to check
     while level_categories:
         print(f"🔎 Searching among {len(level_categories)} categories at level {len(path) + 1}")
-
+        ### Saving options
         options = [name for _, name in level_categories]
-
+        ### Prompt for the AI model
         system_prompt = f"""
         You are a product categorization assistant.
 
@@ -1040,16 +1056,19 @@ def get_deep_category_path(product_name, product_description):
         """
 
         try:
+            ### Call the model with system and user prompts
             response = deepseek_chat([
                 SystemMessage(content=system_prompt),
                 HumanMessage(content="Select the best fitting category from the list.")
             ])
+            ### Clean the output from <think> tags
             cleaned_category = remove_thinking_tags(response.content)
             chosen_category = cleaned_category.strip()
             print(f"✅ AI selected: {repr(chosen_category)}")
-            
+        ### Manage exceptions
         except Exception as e:
             print("❌ Error during AI selection:", e)
+            ### Stop the loop
             break
 
         # Fetch selected category ID
@@ -1057,32 +1076,44 @@ def get_deep_category_path(product_name, product_description):
             SELECT id FROM categories
             WHERE name = %s AND (parent_id = %s OR (%s IS NULL AND parent_id IS NULL))
         """, (chosen_category, parent_id, parent_id))
+        ### Save thw result of the query
         result = cursor.fetchone()
+        ### If result of the query is empty, print an error message and break the loop
         if not result:
             print(f"❌ Category '{chosen_category}' not found in DB.")
             break
 
+        ### Saving category ID
         category_id = result[0]
+        ### Add chosen category to the path
         path.append(chosen_category)
+        ### Set parent_id to the current category ID
         parent_id = category_id
 
-        # Fetch children for next loop
+        ### Fetch children for next loop
         cursor.execute("SELECT id, name FROM categories WHERE parent_id = %s", (parent_id,))
+        ### Save the result of the query
         level_categories = cursor.fetchall()
 
     cursor.close()
 
+    ### If path is found add it to the full path
     if path:
         full_path = " > ".join(path)
+        ### Terminal output
         print(f"🏁 Final path: {full_path}")
         return full_path
+    ### If path is empty, print a warning message and return None
     else:
         print("⚠️ No category path could be determined.")
         return None
 
+### Function to get the category path by ID
 def get_category_path_by_id(category_id):
+    ### Initialize an empty list for the path
     path = []
     cursor = mysql.connection.cursor()
+    ### Loop until there are no more parent categories
     while category_id:
         cursor.execute("SELECT name, parent_id FROM categories WHERE id = %s", (category_id,))
         result = cursor.fetchone()
@@ -1091,48 +1122,65 @@ def get_category_path_by_id(category_id):
             path.insert(0, name)
             category_id = parent_id
         else:
+            ### if no result is found break the loop
             break
     cursor.close()
     return " > ".join(path) if path else None
 
+### Function to get the full path of a category by ID
 def get_category_full_path(cat_id, cursor, cache={}):
+    ### If the path for this category ID is already computed return it from cache
     if cat_id in cache:
         return cache[cat_id]
     
+    ### Query to get the name and parent_id of the category
     cursor.execute("SELECT name, parent_id FROM categories WHERE id = %s", (cat_id,))
     row = cursor.fetchone()
+    ### If no row is found, return an empty string
     if not row:
         return ""
 
+    ### If row is found, unpack the name and parent_id
     name, parent_id = row
+    ### If parent_id is not None, recursively get the full path of the parent category
     if parent_id:
         parent_path = get_category_full_path(parent_id, cursor, cache)
         full_path = f"{parent_path} > {name}"
+    ### If parent_id is None, the full path is just the name
     else:
         full_path = name
-
+    ### Save the computed path in the cache
     cache[cat_id] = full_path
+
     return full_path
 
-### L.Routes
+###------------------------------------------------------------------------
+### Routes
 
 ### 1.General Pages & Home
 
+### Route fierstpage
 @app.route('/firstpage')
+### Function called when firstpage is requested
 def firstpage():
     return render_template('firstpage.html')
 
+### Route index
 @app.route('/')
+### Function called when index is requested
 def index():
+    ### When user not authenticated, redirect to firstpage page
     if 'user_id' not in session:
         return render_template("firstpage.html")
 
+    ### Saving session variables in local variables
     user_id = session.get('user_id')
     username = session.get('username')
     fullname = session.get("name", "Guest") + " " + session.get("surname", "")
 
     conn = get_db_connection()
     cursor = conn.cursor()
+    ### Query to get the conversations for the user
     cursor.execute("""
         SELECT conversation_id, title, created_at
         FROM conversations
@@ -1144,6 +1192,7 @@ def index():
     conversations = [dict(zip(columns, row)) for row in rows]
     conn.close()
 
+    ### return template index.html with the user information and conversations
     return render_template(
         'index.html',
         user_id=user_id,
@@ -1154,11 +1203,16 @@ def index():
         active_conversation_id=None
     )
 
+### DEBUG
+### Route /temp
 @app.route('/temp', methods=['GET', 'POST'])
+### Function called when temp is requested
 def temp():
     return render_template('temp.html')
 
+### Route testdb
 @app.route('/testdb')
+### Function called when testdb is requested DEBUG
 def testdb():
     try:
         cur = mysql.connection.cursor()
@@ -1167,95 +1221,119 @@ def testdb():
         return f"MySQL Version: {data[0]}"
     except Exception as e:
         return f"Database Connection Error: {str(e)}"
-    
+
+###-------------------------------------------------
 ### 2.Chat & Conversation Management
 
+### Route for conversation
 @app.route('/conversation/<int:conversation_id>')
+### Function called when conversation is requested
 def view_conversation(conversation_id):
+    ### Save user_id from the session in local variable
     user_id = session.get("user_id")
+    ### if user_id is not found in the session varibles redirect to login page
     if not user_id:
         return redirect(url_for("login"))
 
     conn = get_db_connection()
     cursor = conn.cursor()
-
-    # Aktif konuşma bilgisi
+    ### Query to get the conversation information
     cursor.execute("""
         SELECT title, created_at FROM conversations
         WHERE conversation_id = %s AND user_id = %s
     """, (conversation_id, user_id))
+    ### Saving result of the query in convo_info
     convo_info = cursor.fetchone()
-
+    ### If no conversation is found, redirect to index page
     if not convo_info:
         conn.close()
         return redirect(url_for("index"))
 
+    ### Unpacking the conversation information in local variables
     title, created_at = convo_info
 
+    ### Update log
     log_action(
         LogType.CONVERSATION_RESTORED,
         f"Conversation {conversation_id} restored by user.",
         user_id=user_id
     )
-    # Mesajları al (message_id ile birlikte!)
+    ### Query to get the messages for the conversation
     cursor.execute("""
         SELECT message_id, sender_type, content, sent_at
         FROM messages
         WHERE conversation_id = %s
         ORDER BY sent_at ASC
     """, (conversation_id,))
+    ### Saving result of the query in raw_messages
     raw_messages = cursor.fetchall()
 
+    ### Init empty list for messages
     messages = []
+    ### For each element in raw_messages
     for row in raw_messages:
+        ### Unpacking the row in local variables
         message_id, sender_type, content, sent_at = row
+        ###
         msg_dict = {
+            ### Unique message ID
             "message_id": message_id,
+            ### Message sender type (user or bot)
             "sender_type": sender_type,
+            ### Message content
             "content": content,
+            ### Message sent timestamp
             "sent_at": sent_at.strftime("%d.%m.%Y %H:%M"),
         }
 
-        # Eğer bu mesaj bir ürün önerisi ise
+        ### If the message is from the bot
         if "<PRODUCT>" in content and sender_type == "bot":
+            ### Query to get the product suggestions for the message
             cursor.execute("""
                 SELECT product_name, product_description, liked
                 FROM product_suggestions
                 WHERE conversation_id = %s AND message_id = %s AND user_id = %s
             """, (conversation_id, message_id, user_id))
+            ### Fetch product from the database
             product_rows = cursor.fetchall()
-
+            ### Init empty list for products
             products = []
+            ### for each product in the product_rows
             for p in product_rows:
+                ### Add the product to the list "products"
                 products.append({
                     "name": p[0],
                     "description": p[1],
                     "liked": bool(p[2])
                 })
-
+            ### Add the products to the message dictionary
             msg_dict["products"] = products
-
+        ### Add the fully built message dictionary to the messages list
         messages.append(msg_dict)
-
-    # Kullanıcının önceki konuşmaları
+    ### Query to get the conversations for the user
     cursor.execute("""
         SELECT conversation_id, title, created_at
         FROM conversations
         WHERE user_id = %s
         ORDER BY last_activity_at DESC
     """, (user_id,))
+    ### Unpacking the result of the query in local variables
     raw_conversations = cursor.fetchall()
     conversations = [
         {
+            ### Unique conversation ID
             "conversation_id": row[0],
+            ### Conversation title
             "title": row[1],
+            ### Timestamp of the conversation creation
             "created_at": row[2].strftime("%d %B %Y %H:%M")
         }
+        ### Build a list of dictionaries from the raw query result
         for row in raw_conversations
     ]
 
     conn.close()
-
+    ### Render the template with user info ant the conversation
     return render_template(
         "index.html",
         fullname=session.get("name", "Guest") + " " + session.get("surname", ""),
@@ -1266,27 +1344,33 @@ def view_conversation(conversation_id):
         active_created_at=created_at.strftime("%d %B %Y %H:%M")
     )
 
+### Route for endig the conversation
 @app.route('/end_chat', methods=['POST'])
+### Function called when end_chat is requested
 def end_chat():
     print("Ending chat backend started") 
     
-    # Get conversation_id from form (POST)
+    ### Get conversation_id from form (POST)
     form_conversation_id = request.form.get("conversation_id")
     print(f"Form conversation_id: {form_conversation_id}")
-
+    ### If form_conversation_id is found
     if form_conversation_id:
+        ### Try to cast it to int
         try:
             conversation_id = int(form_conversation_id)
         except ValueError:
+            ### If casting fails, get conversation_id from session
             conversation_id = session.get('conversation_id')
+    ### If form_conversation_id is not found
     else:
+        ### Get conversation_id from session
         conversation_id = session.get('conversation_id')
 
     print(f"Ending conversation: {conversation_id}")
-    
+    ### If conversation_id is not found, redirect to index
     if not conversation_id:
         return redirect(url_for('index'))
-
+    ### Try 
     try:
         update_conversation_status(conversation_id, 0)
         save_message(conversation_id, 'bot', 'Conversation ended.')

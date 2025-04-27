@@ -5,7 +5,7 @@ This is an AI-powered **Product Recommendation Web App** that uses **OpenAI's AP
 ---
 
 ## 🚀 Features
-- 🔥 **AI-Powered Recommendations** – Uses OpenAI's GPT model to suggest products based on user input.
+- 🔥 **AI-Powered Recommendations** – DeepSeek API Groq.
 - 🖥️ **Modern Web Interface** – A user-friendly UI for seamless interaction.
 - 🗄️ **Database Integration** – MySQL database to store product information and user interactions.
 - 🌐 **REST API Support** – Backend API for fetching and updating recommendations.
@@ -17,7 +17,7 @@ This is an AI-powered **Product Recommendation Web App** that uses **OpenAI's AP
 | Technology | Description |
 |------------|------------|
 | **Python & Flask** | Backend API and business logic |
-| **OpenAI API** | AI-driven recommendations |
+| **OpenAI API** | AI-driven recommendations using DeepSeek API |
 | **MySQL** | Database for storing product and user data |
 | **HTML, CSS, JavaScript** | Frontend for user interactions |
 | **GitHub Actions** | CI/CD pipeline for deployment |

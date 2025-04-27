@@ -1,6 +1,6 @@
 # 🛒 AI Product Recommendation System
 
-This is an AI-powered **Product Recommendation Web App** that uses **OpenAI's API** to provide personalized product suggestions based on user preferences. Built with **Flask, OpenAI API, and MySQL**, this system helps users discover the best products suited to their needs.
+This is an AI-powered **Product Recommendation Web App** that uses **Deepseek's API** to provide personalized product suggestions based on user preferences. Built with **Flask, Deepseek API, and MySQL**, this system helps users discover the best products suited to their needs.
 
 ---
 
